@@ -1,0 +1,27 @@
+# Default configuration for the ingestion engine.
+# Copy this file and adjust per-dataset rather than editing config.py directly.
+
+id_cardinality_ratio: 0.9
+categorical_max_unique: 30
+missing_warn_threshold: 0.30
+
+numeric_impute_strategy: median      # median | mean | drop_rows
+categorical_impute_strategy: mode    # mode | constant | drop_rows
+categorical_impute_constant: missing
+drop_duplicate_rows: true
+outlier_capping: false
+outlier_iqr_multiplier: 1.5
+
+min_rows: 10
+max_missing_threshold_hard_fail: 0.95
+
+target_column: null   # leave null to auto-detect from target_name_hints
+target_name_hints:
+  - target
+  - label
+  - risk
+  - class
+  - "y"
+
+output_dir: output
+schema_history_path: output/schema_metadata.json

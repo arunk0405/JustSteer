@@ -1,0 +1,230 @@
+# .github/workflows/auto_retrain.yml
+#
+# Self-Healing Retraining Workflow
+# ─────────────────────────────────
+# Triggered by: drift_monitor.py → GitHub API repository_dispatch event
+#               (event_type: "drift_detected")
+# Can also run manually via: Actions → "Run workflow" button
+#
+# What it does:
+#   1. Checks out the repo with full history (so train.csv and models/ are available)
+#   2. Restores daily_features.db from the Actions cache (populated by the
+#      ingestion job — avoids re-downloading all API data on every retrain)
+#   3. Installs Python dependencies
+#   4. Runs train.py — trains XGBoost + Ridge, logs to MLflow local store
+#   5. Commits the updated models/, train.csv, and mlruns/ back to the repo
+#      so the next workflow run always starts from the latest checkpoint
+#   6. Uploads MLflow artifacts as a downloadable Actions artifact
+#   7. Annotates the summary with the drift payload that triggered the run
+#
+# Secrets required (set in repo Settings → Secrets and variables → Actions):
+#   TOMTOM_API_KEY       — TomTom free-tier key (for data_ingestion.py)
+#   GITHUB_TOKEN         — automatically injected by GitHub; no manual setup needed
+#
+# NOTE: GITHUB_TOKEN is a built-in Actions secret. The PAT used by drift_monitor.py
+# to TRIGGER the workflow is separate — set it as DISPATCH_TOKEN in your local env.
+# Inside the workflow, GitHub's built-in GITHUB_TOKEN is used for the git commit step.
+
+name: Auto Retrain on Drift
+
+on:
+  # Primary trigger: fired programmatically by drift_monitor.py
+  repository_dispatch:
+    types: [drift_detected]
+
+  # Secondary trigger: manual run from the GitHub Actions UI
+  # Useful for forced retrains (e.g. after a deliberate data correction)
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: "Reason for manual retrain"
+        required: false
+        default: "Manual trigger"
+
+# Prevent concurrent retrains — if a drift event fires while a retrain is
+# already in progress, cancel the old run rather than running two in parallel.
+# This avoids two jobs racing to commit updated model files.
+concurrency:
+  group: retrain
+  cancel-in-progress: true
+
+jobs:
+  retrain:
+    name: Retrain Models
+    runs-on: ubuntu-latest
+
+    # Persist key outputs as step outputs for the summary annotation
+    outputs:
+      mlflow_run_id: ${{ steps.train.outputs.mlflow_run_id }}
+      drift_columns: ${{ steps.log_drift.outputs.drift_columns }}
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # fetch-depth: 0 gives full git history, needed for the commit step
+          # to correctly detect what changed rather than amending a shallow clone
+          fetch-depth: 0
+
+      # ── 2. Log the drift payload that triggered this run ─────────────────
+      - name: Log drift trigger details
+        id: log_drift
+        shell: bash
+        run: |
+          # For repository_dispatch runs: parse the client_payload
+          # For workflow_dispatch runs: print the manual reason
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            echo "=== Drift Trigger Payload ==="
+            # github.event.client_payload is available as a JSON object in the context
+            PAYLOAD='${{ toJson(github.event.client_payload) }}'
+            echo "$PAYLOAD" | python3 -m json.tool || echo "$PAYLOAD"
+
+            # Extract which columns drifted for the job summary
+            DRIFT_COLS=$(echo "$PAYLOAD" \
+              | python3 -c "
+          import sys, json
+          p = json.load(sys.stdin)
+          cols = p.get('drift_details', {}).get('columns', {})
+          drifted = [k for k, v in cols.items() if v.get('drift_detected')]
+          print(','.join(drifted) if drifted else 'none')
+          " 2>/dev/null || echo "unknown")
+            echo "drift_columns=$DRIFT_COLS" >> "$GITHUB_OUTPUT"
+            echo "Drifted columns: $DRIFT_COLS"
+          else
+            echo "Manual trigger reason: ${{ github.event.inputs.reason }}"
+            echo "drift_columns=manual" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ── 3. Set up Python ─────────────────────────────────────────────────
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          # Cache pip packages keyed on requirements-mlops.txt hash
+          # Avoids re-downloading ~300 MB of XGBoost/Evidently on every run
+          cache: "pip"
+          cache-dependency-path: requirements-mlops.txt
+
+      # ── 4. Install dependencies ───────────────────────────────────────────
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-mlops.txt
+
+      # ── 5. Restore daily_features.db from cache ───────────────────────────
+      # The database is too large to commit to git but too expensive to rebuild
+      # from scratch on every retrain. GitHub Actions cache persists it between
+      # workflow runs (up to 10 GB, evicted after 7 days of no access).
+      - name: Restore feature database from cache
+        id: cache_db
+        uses: actions/cache@v4
+        with:
+          path: daily_features.db
+          # Cache key includes the date so each day gets a fresh cache slot;
+          # restore-keys falls back to the most recent slot if today's isn't warm yet.
+          key: features-db-${{ runner.os }}-${{ hashFiles('daily_features.db') }}
+          restore-keys: |
+            features-db-${{ runner.os }}-
+
+      # ── 6. Run data ingestion (top-up the DB with today's API data) ───────
+      # Even during a retrain triggered by drift, we want the very latest data.
+      # This step is best-effort: if the API is down, we proceed with cached data.
+      - name: Top-up feature database
+        env:
+          TOMTOM_API_KEY: ${{ secrets.TOMTOM_API_KEY }}
+        run: |
+          python data_ingestion.py || echo "Warning: data ingestion failed, continuing with cached data"
+
+      # ── 7. Train models ───────────────────────────────────────────────────
+      - name: Run train.py
+        id: train
+        env:
+          # Pass the git SHA so MLflow tags the run with the exact commit
+          GITHUB_SHA: ${{ github.sha }}
+          MLFLOW_TRACKING_URI: mlruns
+        run: |
+          # Determine the trigger source for MLflow tagging
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            TRIGGER="drift_monitor_auto"
+          else
+            TRIGGER="manual_${{ github.actor }}"
+          fi
+
+          # Run training and capture output
+          python train.py --triggered-by "$TRIGGER" | tee train_output.txt
+
+          # Extract the MLflow run ID from training output for downstream steps
+          RUN_ID=$(grep "MLflow Run ID" train_output.txt | awk '{print $NF}' || echo "unknown")
+          echo "mlflow_run_id=$RUN_ID" >> "$GITHUB_OUTPUT"
+          echo "MLflow Run ID: $RUN_ID"
+
+      # ── 8. Run drift monitor in dry-run mode to record post-retrain baseline ──
+      # This doesn't fire a webhook — it just generates a fresh drift report
+      # so you can compare pre-retrain vs post-retrain distributions.
+      - name: Generate post-retrain drift baseline (dry-run)
+        run: |
+          python drift_monitor.py --dry-run || echo "Drift baseline generation skipped (no train.csv yet)"
+
+      # ── 9. Upload MLflow artifacts ────────────────────────────────────────
+      - name: Upload MLflow run artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlflow-run-${{ steps.train.outputs.mlflow_run_id }}
+          path: |
+            mlruns/
+            models/
+            drift_reports/
+          # Keep artifacts for 30 days; older runs are still tracked in mlruns/
+          retention-days: 30
+
+      # ── 10. Commit updated models and data back to the repo ───────────────
+      # This is the "self-healing" step: new model files are committed so
+      # the FastAPI service can pull them on next deployment without manual
+      # intervention.
+      #
+      # We commit only the files that matter — not the full mlruns/ directory
+      # (MLflow generates many small files; use the artifact upload above for that).
+      - name: Commit updated models and train.csv
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Stage only the relevant files
+          git add models/ train.csv || true
+
+          # Only commit if there are actual changes (avoids empty commits)
+          if git diff --staged --quiet; then
+            echo "No model changes to commit — training produced identical artifacts."
+          else
+            COMMIT_MSG="chore: auto-retrain triggered by drift in ${{ steps.log_drift.outputs.drift_columns }} [skip ci]"
+            git commit -m "$COMMIT_MSG"
+            git push
+            echo "Committed and pushed updated models."
+          fi
+
+      # ── 11. Write job summary ──────────────────────────────────────────────
+      # This populates the "Summary" tab in GitHub Actions with a readable report.
+      - name: Write job summary
+        if: always()
+        run: |
+          {
+            echo "## 🔄 Auto-Retrain Summary"
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| **Trigger** | \`${{ github.event_name }}\` |"
+            echo "| **Drifted columns** | \`${{ steps.log_drift.outputs.drift_columns }}\` |"
+            echo "| **MLflow Run ID** | \`${{ steps.train.outputs.mlflow_run_id }}\` |"
+            echo "| **Git SHA** | \`${{ github.sha }}\` |"
+            echo "| **Timestamp** | $(date -u '+%Y-%m-%dT%H:%M:%SZ') |"
+            echo ""
+            if [ -f train_output.txt ]; then
+              echo "### Training Output"
+              echo "\`\`\`"
+              cat train_output.txt
+              echo "\`\`\`"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

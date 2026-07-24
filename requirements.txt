@@ -1,0 +1,6 @@
+pandas>=2.0
+numpy>=1.24
+pyyaml>=6.0
+pytest>=7.4
+openpyxl>=3.1     # needed only if you'll ingest .xlsx/.xls files
+pyarrow>=14.0     # needed only if you'll ingest .parquet files

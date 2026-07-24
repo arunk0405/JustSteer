@@ -1,0 +1,26 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+output/
+.venv/
+venv/
+*.egg-info/
+.DS_Store
+
+
+# ── Secrets ───────────────────────────────────────────────────────────────────
+.env
+
+# ── MLOps runtime artifacts ───────────────────────────────────────────────────
+daily_features.db
+mlruns/
+drift_reports/
+*.log
+train_output.txt
+
+# ── Model binaries (committed only when auto_retrain.yml pushes them) ─────────
+# Uncomment the line below if you want to exclude models/ from manual commits:
+# models/
+
+# ── Virtual environments ──────────────────────────────────────────────────────
+mlops/

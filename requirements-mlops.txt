@@ -1,0 +1,29 @@
+# requirements-mlops.txt
+# Dependencies for the Self-Healing MLOps Data Pipeline
+# Pin minor versions for reproducibility; allow patch updates for security fixes.
+#
+# Install: pip install -r requirements-mlops.txt
+
+# ── Data Ingestion ────────────────────────────────────────────────────────────
+requests==2.32.3          # HTTP client for Open-Meteo and TomTom APIs
+urllib3==2.2.3            # Retry logic (used by requests via HTTPAdapter)
+
+# ── Data Processing ───────────────────────────────────────────────────────────
+pandas==2.2.3             # DataFrames for feature engineering
+
+# ── Drift Detection ───────────────────────────────────────────────────────────
+evidently==0.4.33         # Drift metrics: ColumnDriftMetric, DataDriftTable
+                          # KS test is built-in; no extra scipy install needed
+                          # (evidently pulls scipy as a transitive dep)
+
+# ── Model Training ────────────────────────────────────────────────────────────
+xgboost==2.1.1            # XGBoost Road Risk Classifier
+scikit-learn==1.5.1       # Ridge Edge Velocity Predictor + Pipeline + StandardScaler
+joblib==1.4.2             # Model serialisation for sklearn Pipeline
+
+# ── Experiment Tracking ───────────────────────────────────────────────────────
+mlflow==2.14.3            # Local experiment tracking (mlruns/ directory)
+                          # No server needed; mlruns/ is a flat-file store
+
+# ── Utilities ────────────────────────────────────────────────────────────────
+python-dotenv==1.0.1      # Load .env for local development (GITHUB_TOKEN etc.)
