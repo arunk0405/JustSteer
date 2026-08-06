@@ -149,3 +149,119 @@ DVC-tracked as `data/reference_training_data.csv` for the closed-loop
 retraining pipeline described elsewhere in this project — the drift check
 (`check_drift.py`) compares live data against this exact reference set and
 feature list.
+
+---
+
+## Phase 2 — Context Enrichment (Zone-level Weather & Traffic)
+
+Phase 2 adds area-level weather and road-corridor traffic context to every
+delivery record, giving the model spatial and environmental signals it needs
+for accurate route-risk prediction.
+
+### What it adds
+
+| New columns | Source |
+|---|---|
+| `zone_name`, `zone_code`, `zone_type`, `zone_tags` | Zone registry (static config) |
+| `corridor_name`, `corridor_code` | Zone registry (nearest corridor) |
+| `weather_condition`, `temp_celsius`, `humidity_pct` | OpenWeatherMap (OWM) |
+| `wind_speed_mps`, `visibility_m`, `rain_1h_mm` | OWM |
+| `rain_risk_score` | Computed 0–1 score (rain + NE monsoon multiplier) |
+| `is_raining`, `is_foggy`, `is_high_wind`, `is_ne_monsoon` | Derived flags |
+| `rain_forecast_hours` | OWM 3-hourly forecast (how many upcoming slots have rain) |
+| `congestion_index`, `congestion_level` | TomTom Traffic Flow API |
+| `current_speed_kmph`, `freeflow_speed_kmph` | TomTom |
+| `travel_time_ratio` | Computed and clamped at 5.0 |
+| `traffic_source` | `"tomtom"` or `"heuristic"` |
+
+### Zone registry — Chennai
+
+35 zones defined in `configs/zones/chennai.yaml`:
+- **25 area zones** — Anna Nagar, T. Nagar, Adyar, Velachery, Chromepet,
+  Sholinganallur, Ambattur, Tambaram, and more.
+- **10 road corridors** — GST Road, Outer Ring Road, Anna Salai, OMR,
+  ECR, IRR, Poonamallee High Road, NH48, Sardar Patel Road,
+  Medavakkam–Sholinganallur Road.
+
+Each zone has a centroid lat/lon, influence radius, semantic type, and
+tags (e.g. `waterlogging_risk`, `peak_hour_congestion`). Corridors have
+ordered waypoints used for traffic queries.
+
+### Quick start
+
+```bash
+# 1. Run Phase 1 ingestion first (produces output/processed_data.csv)
+python main.py --input sample_data/sample_delivery_data.csv
+
+# 2. Enrich with context (no API keys needed — uses dry_run automatically)
+python -m src.context.enricher
+
+# Output: output/enriched_data.csv
+```
+
+With real API keys set in `.env`:
+```
+OWM_API_KEY=your_openweathermap_key
+TOMTOM_API_KEY=your_tomtom_key
+```
+
+then re-run the same command — it auto-detects the keys and switches to
+live data.
+
+### Configuration
+
+All thresholds live in `configs/context_config.yaml`. Key settings:
+
+| Setting | What it controls |
+|---|---|
+| `weather.cache_ttl_seconds` | How long a zone's weather is cached (default: 900s / 15 min) |
+| `weather.rain_risk.*` | mm/hour thresholds for low / moderate / high / severe rain risk |
+| `weather.ne_monsoon.risk_multiplier` | Rain risk multiplier during Oct–Dec NE monsoon season |
+| `weather.forecast_hours` | How many hours ahead to fetch for pre-shift planning |
+| `traffic.cache_ttl_seconds` | Traffic cache TTL (default: 300s / 5 min) |
+| `traffic.congestion_levels.*` | Speed-ratio thresholds for free_flow / moderate / heavy / severe |
+| `traffic.travel_time_ratio_max` | Clamp for travel_time_ratio outliers (default: 5.0) |
+| `traffic.peak_hour_heuristic.*` | Synthetic congestion when no API key is set |
+| `zone_registry.corridor_max_distance_km` | Max km to assign a corridor to a delivery point |
+
+### Using the context module from Python
+
+```python
+from src.context import ZoneRegistry, WeatherFetcher, TrafficFetcher, ContextAggregator
+
+registry   = ZoneRegistry("configs/zones/chennai.yaml")
+weather    = WeatherFetcher()          # reads OWM_API_KEY from env
+traffic    = TrafficFetcher()          # reads TOMTOM_API_KEY from env
+aggregator = ContextAggregator(registry, weather, traffic)
+
+# Single coordinate lookup
+ctx = aggregator.get_context(lat=13.0067, lon=80.2572)
+print(ctx.zone_name)                   # "Adyar"
+print(ctx.weather.rain_risk_score)     # 0.0 – 1.0
+print(ctx.traffic.congestion_level)    # "free_flow" | "moderate" | "heavy" | "severe"
+
+# Flat dict for ML features
+features = ctx.to_feature_dict()       # 24 keys, ready for DataFrame row
+
+# Batch enrichment
+df = aggregator.to_dataframe([(13.04, 80.23), (12.98, 80.22)])
+```
+
+### Phase 2 project structure additions
+
+```
+configs/
+  context_config.yaml          # all Phase 2 thresholds
+  zones/
+    chennai.yaml                # 25 area zones + 10 road corridors
+src/context/
+  __init__.py                   # public API
+  zone_registry.py              # loads zones.yaml, Haversine spatial lookup
+  weather_fetcher.py            # OWM integration + rain_risk + NE monsoon + forecast
+  traffic_fetcher.py            # TomTom integration + peak-hour heuristic
+  context_aggregator.py         # coordinate → zone → weather + traffic context
+  enricher.py                   # reads processed_data.csv, writes enriched_data.csv
+tests/
+  test_zone_registry.py         # 39 unit tests for the zone registry
+  test_context_integration.py   # integration tests for the full Phase 2 stack
+```

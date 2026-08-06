@@ -29,6 +29,7 @@ Scheduling (Windows Task Scheduler):
 import logging
 import sqlite3
 import sys
+import os
 from datetime import datetime, timedelta
 from pathlib import Path
 from time import sleep
@@ -37,6 +38,9 @@ from typing import List, Dict, Any, Optional
 import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+from dotenv import load_dotenv
+
+load_dotenv()  # Load TOMTOM_API_KEY and other vars from .env file
 
 # ===========================
 # Configuration
@@ -56,7 +60,7 @@ CHENNAI_BBOX = {
 }
 
 # API Configuration
-TOMTOM_API_KEY = "YOUR_TOMTOM_API_KEY"  # Replace with env var in production: os.getenv("TOMTOM_API_KEY")
+TOMTOM_API_KEY =os.getenv("TOMTOM_API_KEY")
 OPEN_METEO_BASE_URL = "https://api.open-meteo.com/v1/forecast"
 
 # Database
@@ -262,7 +266,7 @@ def fetch_traffic_data(session: requests.Session, hours_lookback: int = 24) -> L
     Raises:
         requests.RequestException: If API call fails after retries
     """
-    if TOMTOM_API_KEY == "YOUR_TOMTOM_API_KEY":
+    if not TOMTOM_API_KEY or TOMTOM_API_KEY == "YOUR_TOMTOM_API_KEY":
         logger.warning("TomTom API key not configured. Using synthetic traffic data (speed=40 km/h).")
         return _generate_synthetic_traffic(hours_lookback)
     

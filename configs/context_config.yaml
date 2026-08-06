@@ -1,0 +1,101 @@
+# configs/context_config.yaml
+# ----------------------------
+# All tunable thresholds for the Phase 2 context module.
+# Override by pointing ContextAggregator or the enricher at this file.
+# Do NOT edit src/context/ Python files directly for threshold changes.
+
+# ── Zone registry ─────────────────────────────────────────────────────────────
+zone_registry:
+  # Path to the city zones YAML (relative to project root)
+  chennai_zones: configs/zones/chennai.yaml
+
+  # Max distance (km) from a delivery point to a corridor before the
+  # point is considered "not on any named corridor"
+  corridor_max_distance_km: 5.0
+
+# ── Weather fetcher (OWM) ─────────────────────────────────────────────────────
+weather:
+  # Cache TTL in seconds — how long a zone's weather is considered fresh
+  cache_ttl_seconds: 900          # 15 minutes
+
+  # OWM API timeout
+  request_timeout_seconds: 5
+
+  # Risk thresholds — used to compute rain_risk_score and flag conditions
+  rain_risk:
+    low_mm_per_hour: 2.5          # < 2.5 mm/h → low risk (drizzle)
+    moderate_mm_per_hour: 7.5     # 2.5–7.5 mm/h → moderate
+    high_mm_per_hour: 15.0        # 7.5–15 mm/h → high
+                                  # > 15 mm/h → severe (heavy rain / flood risk)
+  fog_visibility_threshold_m: 1000   # below this → is_foggy = True
+  high_wind_threshold_mps: 10.0      # above this → is_high_wind = True
+
+  # NE monsoon season for Tamil Nadu / Chennai
+  # October–December: heightened rain risk scoring
+  ne_monsoon:
+    start_month: 10               # October
+    end_month: 12                 # December
+    risk_multiplier: 1.5          # multiply base rain_risk_score during this window
+
+  # Hourly forecast: how many hours ahead to fetch for pre-shift planning
+  forecast_hours: 6
+
+# ── Traffic fetcher (TomTom) ──────────────────────────────────────────────────
+traffic:
+  # Cache TTL in seconds — traffic changes fast, keep this short
+  cache_ttl_seconds: 300          # 5 minutes
+
+  # TomTom API timeout
+  request_timeout_seconds: 5
+
+  # Max waypoints to sample per corridor (conserves API quota)
+  max_waypoints_per_corridor: 3
+
+  # Congestion index thresholds (currentSpeed / freeFlowSpeed)
+  congestion_levels:
+    free_flow:  0.85              # >= 0.85 → free flow
+    moderate:   0.60              # 0.60–0.85 → moderate
+    heavy:      0.40              # 0.40–0.60 → heavy
+                                  # < 0.40 → severe
+
+  # travel_time_ratio clamp — cap at this value to prevent extreme outliers
+  # in training data (e.g. standstill roads returning ratio=50)
+  travel_time_ratio_max: 5.0
+
+  # Peak-hour heuristic (used when TOMTOM_API_KEY is absent)
+  # Assigns synthetic congestion based on time-of-day and road type
+  peak_hour_heuristic:
+    enabled: true                 # activate when no API key is set
+    morning_peak:
+      start_hour: 8
+      end_hour: 10
+      congestion_index: 0.55      # heavy traffic
+    evening_peak:
+      start_hour: 17
+      end_hour: 20
+      congestion_index: 0.50      # heavy–severe
+    weekend_discount: 0.20        # congestion_index += 0.20 on weekends (less traffic)
+    night_bonus: 0.30             # congestion_index += 0.30 at night (free-er roads)
+    night_start_hour: 22
+    night_end_hour: 6
+
+# ── Enricher (CSV enrichment pipeline) ───────────────────────────────────────
+enricher:
+  # Default input / output paths (relative to project root)
+  input_csv: output/processed_data.csv
+  output_csv: output/enriched_data.csv
+
+  # Column in processed_data.csv that maps to a zone code or area name.
+  # If absent, the enricher falls back to road_type-based zone assignment.
+  zone_column: null               # set to e.g. "area_name" if your CSV has one
+
+  # Column names for lat/lon — if present, use direct coordinates
+  lat_column: null                # e.g. "pickup_lat"
+  lon_column: null                # e.g. "pickup_lon"
+
+  # Column used for peak-hour heuristic lookup
+  time_column: time_of_day        # values: morning, afternoon, evening, night
+  weekend_column: is_weekend
+
+  # When true, enricher logs a row-count and column summary after writing
+  verbose: true

@@ -1,0 +1,350 @@
+# Chennai Zone Registry
+# Covers 25 residential/commercial areas and 10 major road corridors.
+# lat/lon are centroids for area zones and representative anchor points for corridors.
+# radius_km is the influence radius used by the context aggregator to assign
+# a delivery coordinate to its nearest zone.
+#
+# Area zone types:
+#   residential  – primarily housing, apartments
+#   commercial   – shopping, offices, mixed-use
+#   industrial   – factories, warehouses, logistics hubs
+#   coastal      – near-sea areas with distinct weather patterns
+#
+# Corridor zone types:
+#   highway      – express highways and arterial roads
+#   urban_road   – major city roads with traffic signals
+
+city: Chennai
+city_code: CHN
+timezone: Asia/Kolkata
+
+areas:
+  # ── North Chennai ──────────────────────────────────────────────────────────
+  - name: Anna Nagar
+    code: CHN_ANNANAGAR
+    type: residential
+    lat: 13.0850
+    lon: 80.2101
+    radius_km: 2.5
+    tags: [high_density, waterlogging_risk]
+
+  - name: Kilpauk
+    code: CHN_KILPAUK
+    type: residential
+    lat: 13.0827
+    lon: 80.2297
+    radius_km: 1.8
+    tags: [hospital_zone, narrow_roads]
+
+  - name: Perambur
+    code: CHN_PERAMBUR
+    type: industrial
+    lat: 13.1166
+    lon: 80.2352
+    radius_km: 2.0
+    tags: [railway_proximity, industrial]
+
+  - name: Tondiarpet
+    code: CHN_TONDIARPET
+    type: residential
+    lat: 13.1189
+    lon: 80.2947
+    radius_km: 2.0
+    tags: [coastal_proximity, dense_traffic]
+
+  - name: Royapuram
+    code: CHN_ROYAPURAM
+    type: coastal
+    lat: 13.1114
+    lon: 80.2966
+    radius_km: 1.5
+    tags: [fishing_harbour, coastal, narrow_streets]
+
+  # ── Central Chennai ────────────────────────────────────────────────────────
+  - name: Egmore
+    code: CHN_EGMORE
+    type: commercial
+    lat: 13.0732
+    lon: 80.2609
+    radius_km: 1.5
+    tags: [railway_station, high_footfall]
+
+  - name: T. Nagar
+    code: CHN_TNAGAR
+    type: commercial
+    lat: 13.0418
+    lon: 80.2341
+    radius_km: 2.0
+    tags: [shopping_hub, extreme_congestion]
+
+  - name: Nungambakkam
+    code: CHN_NUNGAMBAKKAM
+    type: commercial
+    lat: 13.0569
+    lon: 80.2425
+    radius_km: 1.8
+    tags: [office_zone, embassies]
+
+  - name: Mylapore
+    code: CHN_MYLAPORE
+    type: residential
+    lat: 13.0368
+    lon: 80.2676
+    radius_km: 1.8
+    tags: [heritage_area, temple_traffic]
+
+  - name: Royapettah
+    code: CHN_ROYAPETTAH
+    type: commercial
+    lat: 13.0510
+    lon: 80.2630
+    radius_km: 1.5
+    tags: [hospital_zone, mixed_traffic]
+
+  # ── South Chennai ──────────────────────────────────────────────────────────
+  - name: Adyar
+    code: CHN_ADYAR
+    type: residential
+    lat: 13.0067
+    lon: 80.2572
+    radius_km: 2.5
+    tags: [waterlogging_risk, river_estuary, upscale]
+
+  - name: Velachery
+    code: CHN_VELACHERY
+    type: residential
+    lat: 12.9815
+    lon: 80.2180
+    radius_km: 2.5
+    tags: [waterlogging_risk, it_corridor_proximity, high_density]
+
+  - name: Pallikaranai
+    code: CHN_PALLIKARANAI
+    type: residential
+    lat: 12.9383
+    lon: 80.2132
+    radius_km: 3.0
+    tags: [marsh_proximity, waterlogging_risk, new_development]
+
+  - name: Sholinganallur
+    code: CHN_SHOLINGANALLUR
+    type: commercial
+    lat: 12.9010
+    lon: 80.2279
+    radius_km: 2.5
+    tags: [it_corridor, office_parks, peak_hour_congestion]
+
+  - name: Perungudi
+    code: CHN_PERUNGUDI
+    type: commercial
+    lat: 12.9630
+    lon: 80.2452
+    radius_km: 2.0
+    tags: [it_corridor, tech_parks]
+
+  - name: Chromepet
+    code: CHN_CHROMEPET
+    type: residential
+    lat: 12.9516
+    lon: 80.1462
+    radius_km: 2.5
+    tags: [airport_proximity, leather_industry]
+
+  - name: Pallavaram
+    code: CHN_PALLAVARAM
+    type: residential
+    lat: 12.9675
+    lon: 80.1491
+    radius_km: 2.0
+    tags: [airport_proximity, military_area]
+
+  - name: Tambaram
+    code: CHN_TAMBARAM
+    type: residential
+    lat: 12.9249
+    lon: 80.1000
+    radius_km: 3.0
+    tags: [suburban, railway_junction, gst_road_access]
+
+  # ── West Chennai ───────────────────────────────────────────────────────────
+  - name: Ambattur
+    code: CHN_AMBATTUR
+    type: industrial
+    lat: 13.1143
+    lon: 80.1548
+    radius_km: 3.0
+    tags: [industrial_estate, logistics_hub, heavy_vehicles]
+
+  - name: Poonamallee
+    code: CHN_POONAMALLEE
+    type: residential
+    lat: 13.0474
+    lon: 80.1162
+    radius_km: 2.5
+    tags: [highway_town, suburban]
+
+  - name: Porur
+    code: CHN_PORUR
+    type: residential
+    lat: 13.0358
+    lon: 80.1567
+    radius_km: 2.0
+    tags: [it_corridor_west, orr_junction]
+
+  - name: Vadapalani
+    code: CHN_VADAPALANI
+    type: commercial
+    lat: 13.0521
+    lon: 80.2121
+    radius_km: 1.8
+    tags: [shopping, metro_connectivity]
+
+  # ── Extended / Suburbs ─────────────────────────────────────────────────────
+  - name: Avadi
+    code: CHN_AVADI
+    type: industrial
+    lat: 13.1162
+    lon: 80.1025
+    radius_km: 3.5
+    tags: [defence_township, outer_suburb]
+
+  - name: Madhavaram
+    code: CHN_MADHAVARAM
+    type: residential
+    lat: 13.1485
+    lon: 80.2333
+    radius_km: 2.5
+    tags: [north_suburb, developing]
+
+  - name: Thiruvottiyur
+    code: CHN_THIRUVOTTIYUR
+    type: industrial
+    lat: 13.1627
+    lon: 80.3043
+    radius_km: 2.5
+    tags: [port_proximity, industrial, coastal]
+
+corridors:
+  # Each corridor is defined by an ordered list of waypoints (lat, lon).
+  # The aggregator uses these to compute travel-time index via TomTom.
+  # waypoints should cover the full length at ~2–3 km intervals.
+
+  - name: GST Road
+    code: CHN_GST
+    type: highway
+    description: "Grand Southern Trunk Road — Chennai to Tambaram and beyond"
+    waypoints:
+      - [12.9716, 80.1943]   # Guindy / CMBT junction
+      - [12.9620, 80.1837]   # St. Thomas Mount
+      - [12.9516, 80.1462]   # Chromepet
+      - [12.9400, 80.1250]   # Pallavaram
+      - [12.9249, 80.1000]   # Tambaram
+    typical_freeflow_kmph: 55
+    tags: [airport_access, industrial_freight, peak_congestion]
+
+  - name: Outer Ring Road
+    code: CHN_ORR
+    type: highway
+    description: "ORR — connects western and southern suburbs in a loop"
+    waypoints:
+      - [13.0474, 80.1162]   # Poonamallee
+      - [13.0358, 80.1567]   # Porur
+      - [13.0100, 80.1850]   # Maduravoyal junction
+      - [12.9815, 80.2180]   # Velachery / Medavakkam
+      - [12.9383, 80.2132]   # Pallikaranai
+    typical_freeflow_kmph: 65
+    tags: [bypass_route, heavy_vehicles, night_freight]
+
+  - name: Anna Salai (Mount Road)
+    code: CHN_ANNASALAI
+    type: urban_road
+    description: "Main spine of Chennai — Chepauk to Guindy"
+    waypoints:
+      - [13.0604, 80.2747]   # Chepauk / Marina
+      - [13.0500, 80.2630]   # Royapettah
+      - [13.0418, 80.2341]   # T. Nagar junction
+      - [13.0200, 80.2200]   # Saidapet
+      - [12.9716, 80.1943]   # Guindy
+    typical_freeflow_kmph: 35
+    tags: [central_artery, extreme_congestion, commercial]
+
+  - name: Inner Ring Road (IRR)
+    code: CHN_IRR
+    type: urban_road
+    description: "IRR — Koyambedu to Madhavaram via western edge"
+    waypoints:
+      - [13.0694, 80.1963]   # Koyambedu / CMBT
+      - [13.0850, 80.2101]   # Anna Nagar
+      - [13.1143, 80.1548]   # Ambattur junction
+      - [13.1485, 80.2333]   # Madhavaram
+    typical_freeflow_kmph: 40
+    tags: [bus_terminus, heavy_mixed_traffic]
+
+  - name: Rajiv Gandhi Salai (IT Corridor / OMR)
+    code: CHN_OMR
+    type: highway
+    description: "Old Mahabalipuram Road — Sholinganallur to Siruseri IT parks"
+    waypoints:
+      - [12.9630, 80.2452]   # Perungudi
+      - [12.9010, 80.2279]   # Sholinganallur
+      - [12.8700, 80.2280]   # Perumbakkam
+      - [12.8350, 80.2270]   # Siruseri
+    typical_freeflow_kmph: 60
+    tags: [it_corridor, morning_evening_peak, expressway]
+
+  - name: ECR (East Coast Road)
+    code: CHN_ECR
+    type: highway
+    description: "East Coast Road — Marina to Mahabalipuram along the coast"
+    waypoints:
+      - [13.0550, 80.2788]   # Marina Beach / Thiruvanmiyur junction
+      - [12.9825, 80.2601]   # Adyar
+      - [12.9200, 80.2570]   # Injambakkam
+      - [12.8300, 80.2516]   # Kovalam
+    typical_freeflow_kmph: 70
+    tags: [coastal, weekend_tourist_traffic, scenic]
+
+  - name: Poonamallee High Road
+    code: CHN_POONAMALLEE_HRD
+    type: urban_road
+    description: "Connects central Chennai to western suburbs via Koyambedu"
+    waypoints:
+      - [13.0694, 80.1963]   # Koyambedu
+      - [13.0521, 80.2121]   # Vadapalani
+      - [13.0474, 80.1162]   # Poonamallee
+    typical_freeflow_kmph: 38
+    tags: [western_artery, mixed_traffic, bus_heavy]
+
+  - name: NH 48 (Chennai–Bangalore Highway)
+    code: CHN_NH48
+    type: highway
+    description: "NH 48 from Sriperumbudur direction into Chennai via Poonamallee"
+    waypoints:
+      - [13.0474, 80.1162]   # Poonamallee
+      - [13.0200, 80.0800]   # Kundrathur
+      - [12.9700, 79.9800]   # Sriperumbudur outskirts
+    typical_freeflow_kmph: 80
+    tags: [national_highway, inter_city_freight, toll]
+
+  - name: Sardar Patel Road (Adyar–Guindy)
+    code: CHN_SPR
+    type: urban_road
+    description: "Connects Adyar to Guindy — key south Chennai arterial"
+    waypoints:
+      - [13.0067, 80.2572]   # Adyar
+      - [13.0050, 80.2300]   # Kotturpuram
+      - [12.9900, 80.2100]   # Saidapet
+      - [12.9716, 80.1943]   # Guindy
+    typical_freeflow_kmph: 35
+    tags: [residential_artery, bridge_bottleneck]
+
+  - name: Medavakkam–Sholinganallur Road
+    code: CHN_MEDSHO
+    type: urban_road
+    description: "Connector between Velachery/Medavakkam and OMR"
+    waypoints:
+      - [12.9815, 80.2180]   # Velachery
+      - [12.9600, 80.2220]   # Medavakkam
+      - [12.9010, 80.2279]   # Sholinganallur
+    typical_freeflow_kmph: 32
+    tags: [residential_connector, waterlogging_risk, underdeveloped]
