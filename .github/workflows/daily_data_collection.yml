@@ -1,0 +1,316 @@
+# .github/workflows/daily_data_collection.yml
+#
+# Daily Data Collection Workflow
+# ────────────────────────────────────────────────────────────────────────────
+# Runs every 30 minutes (on the hour and half-hour) to populate two SQLite
+# databases:
+#
+#   daily_features.db            ← data_ingestion.py (root-level script)
+#       Table : features(timestamp, location_key, rainfall, temperature_c,
+#                        wind_speed_kmh, traffic_speed_kmh, feature_source)
+#       Sources: Open-Meteo (free, no key)    — weather
+#                TomTom Flow API (4 points)   — traffic speed proxy
+#       Used by: drift_monitor.py, train.py
+#
+#   data/traffic_history.db      ← src/traffic_collector/collector.py
+#       Table : traffic_snapshots  (corridor-level TomTom readings)
+#       Table : collection_log     (per-run summary)
+#       Sources: TomTom Flow API — 10 corridors × 3 waypoints = 30 calls/run
+#       Config : configs/zones/chennai.yaml
+#
+# Schedule design
+# ───────────────
+#   Two cron triggers fire on the :00 and :30 of every hour = 48 runs/day.
+#   Each collector.py run = 30 TomTom calls → 48 × 30 = 1,440 calls/day.
+#   TomTom free tier = 2,500 calls/day  ✓
+#
+#   data_ingestion.py makes 4 additional TomTom spot-check calls per run →
+#   48 × 4 = 192 extra calls/day → combined total ≈ 1,632/day  ✓
+#
+# Persistence strategy
+# ─────────────────────
+#   Both databases are gitignored. They are kept alive across workflow runs
+#   via GitHub Actions cache:
+#
+#     Restore key : <db>-<OS>-                    (most recent day's data)
+#     Save key    : <db>-<OS>-<YYYYMMDD>-<run_number>
+#                                                 (new entry per run)
+#
+#   This gives accumulating intra-day data AND hands off cleanly day-to-day.
+#   Artifacts (7-day retention) provide a human-downloadable backup per run.
+#
+# Secrets required
+# ─────────────────
+#   TOMTOM_API_KEY   — TomTom developer key (free tier: 2,500 req/day)
+#                      Used by: data_ingestion.py AND collector.py
+#   OWM_API_KEY      — OpenWeatherMap key (used by src/context module; NOT
+#                      needed by data_ingestion.py which uses Open-Meteo)
+#
+# To add secrets:
+#   GitHub repo → Settings → Secrets and variables → Actions → New repository secret
+
+name: Daily Data Collection
+
+on:
+  schedule:
+    - cron: "0 * * * *"    # :00 of every hour  (UTC)
+    - cron: "30 * * * *"   # :30 of every hour  (UTC)
+
+  # Manual trigger — useful for first-run testing or forcing a collection
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry-run mode (no API calls, no DB writes)"
+        required: false
+        default: "false"
+        type: choice
+        options: ["false", "true"]
+      hours_lookback:
+        description: "Weather hours to fetch in data_ingestion.py (default 24)"
+        required: false
+        default: "24"
+
+# Allow concurrent runs (successive half-hour ticks may overlap on slow networks)
+concurrency:
+  group: data-collection-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    name: Collect Traffic & Weather Data
+    runs-on: ubuntu-latest
+
+    outputs:
+      features_inserted: ${{ steps.ingest.outputs.features_inserted }}
+      traffic_success:   ${{ steps.collect_traffic.outputs.success_count }}
+      traffic_total:     ${{ steps.collect_traffic.outputs.total_count }}
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Set up Python 3.11 ────────────────────────────────────────────────
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: requirements.txt
+
+      # ── 3. Install dependencies ──────────────────────────────────────────────
+      # requirements.txt covers both scripts:
+      #   pandas, numpy, pyyaml, requests, cachetools, python-dotenv
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # ── 4. Set TODAY for cache keys ──────────────────────────────────────────
+      # MUST come before cache restore steps that embed ${{ env.TODAY }}
+      - name: Set date environment variable
+        run: echo "TODAY=$(date -u +%Y%m%d)" >> "$GITHUB_ENV"
+
+      # ── 5. Create required directories ──────────────────────────────────────
+      - name: Create required directories
+        run: mkdir -p data logs
+
+      # ── 6. Restore daily_features.db from cache ──────────────────────────────
+      - name: Restore daily_features.db from cache
+        id: cache_features_restore
+        uses: actions/cache/restore@v4
+        with:
+          path: daily_features.db
+          # Exact key won't exist (includes run_number), so we always restore
+          # via the prefix restore-key (most recent save from any earlier run).
+          key: features-db-${{ runner.os }}-${{ env.TODAY }}-latest
+          restore-keys: |
+            features-db-${{ runner.os }}-${{ env.TODAY }}-
+            features-db-${{ runner.os }}-
+
+      # ── 7. Restore traffic_history.db from cache ─────────────────────────────
+      - name: Restore traffic_history.db from cache
+        id: cache_traffic_restore
+        uses: actions/cache/restore@v4
+        with:
+          path: data/traffic_history.db
+          key: traffic-db-${{ runner.os }}-${{ env.TODAY }}-latest
+          restore-keys: |
+            traffic-db-${{ runner.os }}-${{ env.TODAY }}-
+            traffic-db-${{ runner.os }}-
+
+      # ── 8. Run data_ingestion.py → daily_features.db ────────────────────────
+      # Fetches the last 24 h of Open-Meteo weather + TomTom spot-check speeds.
+      # INSERT OR IGNORE deduplicates on (timestamp, location_key).
+      - name: Run data ingestion (features DB)
+        id: ingest
+        env:
+          TOMTOM_API_KEY: ${{ secrets.TOMTOM_API_KEY }}
+        run: |
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            echo "DRY RUN — skipping data_ingestion.py"
+            echo "features_inserted=0" >> "$GITHUB_OUTPUT"
+          else
+            python data_ingestion.py 2>&1 | tee ingest_output.txt
+
+            # Pull inserted-row count from the script's own log line:
+            # "=== Data Ingestion Complete: N new rows ==="
+            INSERTED=$(grep -oP 'Complete: \K[0-9]+(?= new rows)' ingest_output.txt \
+                       | tail -1 || echo "0")
+            echo "features_inserted=${INSERTED}" >> "$GITHUB_OUTPUT"
+            echo "data_ingestion.py → ${INSERTED} new rows in daily_features.db"
+          fi
+
+      # ── 9. Run collector.py → data/traffic_history.db ───────────────────────
+      # Queries 10 Chennai road corridors, 3 waypoints each = 30 TomTom calls.
+      # Uses IST-aware time fields (hour_ist, day_of_week) for ML features.
+      - name: Run traffic collector (history DB)
+        id: collect_traffic
+        env:
+          TOMTOM_API_KEY: ${{ secrets.TOMTOM_API_KEY }}
+        run: |
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            echo "DRY RUN — running collector in --dry-run mode (mock data, no DB writes)"
+            python -m src.traffic_collector.collector --dry-run 2>&1 | tee collector_output.txt
+          else
+            python -m src.traffic_collector.collector 2>&1 | tee collector_output.txt
+          fi
+
+          # Parse the summary line:
+          # "=== Run complete — N/M waypoints OK in X.XXs ==="
+          SUCCESS=$(grep -oP 'Run complete — \K[0-9]+(?=/)' collector_output.txt \
+                    | tail -1 || echo "0")
+          TOTAL=$(grep -oP 'Run complete — [0-9]+/\K[0-9]+(?= waypoints)' collector_output.txt \
+                  | tail -1 || echo "0")
+          echo "success_count=${SUCCESS}" >> "$GITHUB_OUTPUT"
+          echo "total_count=${TOTAL}"     >> "$GITHUB_OUTPUT"
+          echo "collector.py → ${SUCCESS}/${TOTAL} waypoints OK"
+
+      # ── 10. Print DB row counts ───────────────────────────────────────────────
+      - name: Print DB row counts
+        if: always()
+        run: |
+          echo "=== daily_features.db ==="
+          python - <<'PYEOF'
+          import sqlite3, pathlib
+          db = pathlib.Path("daily_features.db")
+          if db.exists():
+              conn = sqlite3.connect(db)
+              n       = conn.execute("SELECT COUNT(*) FROM features").fetchone()[0]
+              newest  = conn.execute("SELECT MAX(timestamp) FROM features").fetchone()[0]
+              conn.close()
+              print(f"  rows   : {n:,}")
+              print(f"  newest : {newest}")
+          else:
+              print("  (not found — first run or dry-run)")
+          PYEOF
+
+          echo ""
+          echo "=== data/traffic_history.db ==="
+          python - <<'PYEOF'
+          import sqlite3, pathlib
+          db = pathlib.Path("data/traffic_history.db")
+          if db.exists():
+              conn = sqlite3.connect(db)
+              n       = conn.execute("SELECT COUNT(*) FROM traffic_snapshots").fetchone()[0]
+              newest  = conn.execute("SELECT MAX(sampled_at_utc) FROM traffic_snapshots").fetchone()[0]
+              runs    = conn.execute("SELECT COUNT(*) FROM collection_log").fetchone()[0]
+              conn.close()
+              print(f"  snapshot rows : {n:,}")
+              print(f"  newest sample : {newest}")
+              print(f"  total runs    : {runs:,}")
+          else:
+              print("  (not found — first run or dry-run)")
+          PYEOF
+
+      # ── 11. Save daily_features.db to cache ──────────────────────────────────
+      # We use cache/save (not cache) to always write even if key already exists.
+      - name: Save daily_features.db to cache
+        if: ${{ github.event.inputs.dry_run != 'true' && always() }}
+        uses: actions/cache/save@v4
+        with:
+          path: daily_features.db
+          key: features-db-${{ runner.os }}-${{ env.TODAY }}-${{ github.run_number }}
+
+      # ── 12. Save traffic_history.db to cache ─────────────────────────────────
+      - name: Save traffic_history.db to cache
+        if: ${{ github.event.inputs.dry_run != 'true' && always() }}
+        uses: actions/cache/save@v4
+        with:
+          path: data/traffic_history.db
+          key: traffic-db-${{ runner.os }}-${{ env.TODAY }}-${{ github.run_number }}
+
+      # ── 13. Upload DB snapshots as downloadable artifacts ────────────────────
+      # Provides a 7-day backup you can download from the Actions UI.
+      - name: Upload DB snapshots as artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-snapshots-${{ github.run_number }}
+          path: |
+            daily_features.db
+            data/traffic_history.db
+          retention-days: 7
+          if-no-files-found: warn
+
+      # ── 14. Write job summary ─────────────────────────────────────────────────
+      - name: Write job summary
+        if: always()
+        run: |
+          {
+            echo "## 📡 Data Collection Run — $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| **Trigger** | \`${{ github.event_name }}\` |"
+            echo "| **Dry-run** | \`${{ github.event.inputs.dry_run || 'false' }}\` |"
+            echo "| **Features inserted** | \`${{ steps.ingest.outputs.features_inserted || 'N/A' }}\` |"
+            echo "| **Traffic waypoints** | \`${{ steps.collect_traffic.outputs.success_count || '?' }}/${{ steps.collect_traffic.outputs.total_count || '?' }}\` |"
+            echo "| **Run number** | \`${{ github.run_number }}\` |"
+            echo ""
+
+            if [ -f ingest_output.txt ]; then
+              echo "<details><summary>data_ingestion.py output (last 30 lines)</summary>"
+              echo ""
+              echo "\`\`\`"
+              tail -30 ingest_output.txt
+              echo "\`\`\`"
+              echo "</details>"
+              echo ""
+            fi
+
+            if [ -f collector_output.txt ]; then
+              echo "<details><summary>collector.py output (last 30 lines)</summary>"
+              echo ""
+              echo "\`\`\`"
+              tail -30 collector_output.txt
+              echo "\`\`\`"
+              echo "</details>"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # ── 15. Gate: fail job if both scripts collected zero rows ────────────────
+      # A single partial failure is expected occasionally (API blip); only fail
+      # hard if NOTHING was collected at all.
+      - name: Fail if no data was collected
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        run: |
+          FEATURES="${{ steps.ingest.outputs.features_inserted }}"
+          TRAFFIC="${{ steps.collect_traffic.outputs.success_count }}"
+
+          if [ "${FEATURES}" = "0" ] && [ "${TRAFFIC}" = "0" ]; then
+            echo "::error title=No data collected::Both data_ingestion.py and" \
+                 "collector.py returned 0 rows. Check TOMTOM_API_KEY secret" \
+                 "and TomTom API status."
+            exit 1
+          fi
+
+          [ "${FEATURES}" = "0" ] && \
+            echo "::warning::data_ingestion.py inserted 0 new features rows" \
+                 "(may be all-duplicates, or API issue — check ingest_output.txt artifact)"
+
+          [ "${TRAFFIC}" = "0" ] && \
+            echo "::warning::collector.py collected 0 traffic waypoints" \
+                 "(check TOMTOM_API_KEY and corridor config)"
+
+          exit 0
