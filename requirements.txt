@@ -8,3 +8,6 @@ pyarrow>=14.0     # needed only if you'll ingest .parquet files
 # Phase 2 — context module (zone registry + weather/traffic fetchers)
 requests>=2.31
 cachetools>=5.3
+
+# API key loading — used by data_ingestion.py and src/traffic_collector/collector.py
+python-dotenv>=1.0.0
