@@ -24,9 +24,9 @@ When Evidently AI detects distribution drift in the live data (p-value < 0.05), 
 
 | Script | Purpose | Runs |
 |---|---|---|
-| **data_ingestion.py** | Fetch weather (Open-Meteo) + traffic (TomTom) data → SQLite | Daily cron (2 AM) |
-| **drift_monitor.py** | Kolmogorov-Smirnov test on `rainfall`, `traffic_speed_kmh` → webhook trigger | Daily cron (2:05 AM) |
-| **train.py** | Train XGBoost + Ridge → MLflow + export models/ + new train.csv | On-demand via GitHub Actions |
+| **src/mlops/data_ingestion.py** | Fetch weather (Open-Meteo) + traffic (TomTom) data → SQLite | Daily cron (2 AM) |
+| **src/mlops/drift_monitor.py** | Kolmogorov-Smirnov test on `rainfall`, `traffic_speed_kmh` → webhook trigger | Daily cron (2:05 AM) |
+| **src/mlops/train.py** | Train XGBoost + Ridge → MLflow + export models/ + new train.csv | On-demand via GitHub Actions |
 | **.github/workflows/auto_retrain.yml** | GitHub Actions retraining pipeline | Triggered by `repository_dispatch` |
 
 ### Data Flow
@@ -36,15 +36,15 @@ When Evidently AI detects distribution drift in the live data (p-value < 0.05), 
 │  Open-Meteo API     │  Chennai weather (rainfall, temp, wind)
 │  TomTom Traffic API │  Bounding-box traffic speeds
 └──────────┬──────────┘
-           │ data_ingestion.py (daily)
+           │ python -m src.mlops.data_ingestion (daily)
            ▼
 ┌─────────────────────┐
-│ daily_features.db   │  SQLite with UNIQUE(timestamp, location_key)
+│ data/db/daily_features.db │  SQLite with UNIQUE(timestamp, location_key)
 └──────────┬──────────┘
-           │ drift_monitor.py (daily after ingestion)
+           │ python -m src.mlops.drift_monitor (daily after ingestion)
            ▼
 ┌─────────────────────┐
-│ Evidently AI        │  KS test: reference (train.csv) vs current (last 7 days)
+│ Evidently AI        │  KS test: reference (data/raw/train.csv) vs current (last 7 days)
 │ ColumnDriftMetric   │  p-value < 0.05? → DRIFT DETECTED
 └──────────┬──────────┘
            │ repository_dispatch webhook
@@ -90,9 +90,9 @@ cp .env.example .env
 #   GITHUB_REPO_NAME=JustSteer
 
 # 5. Test the pipeline locally
-python data_ingestion.py        # Populate daily_features.db
-python train.py                 # Train initial models → models/, train.csv
-python drift_monitor.py --dry-run  # Test drift detection without webhook
+python -m src.mlops.data_ingestion        # Populate data/db/daily_features.db
+python -m src.mlops.train                 # Train initial models → models/, data/raw/train.csv
+python -m src.mlops.drift_monitor --dry-run  # Test drift detection without webhook
 ```
 
 ---
@@ -103,24 +103,24 @@ python drift_monitor.py --dry-run  # Test drift detection without webhook
 
 #### Run data ingestion
 ```bash
-python data_ingestion.py
+python -m src.mlops.data_ingestion
 ```
-Creates `daily_features.db` with hourly weather + traffic features.
+Creates `data/db/daily_features.db` with hourly weather + traffic features.
 
 #### Run drift monitoring (dry-run, no webhook)
 ```bash
-python drift_monitor.py --dry-run
+python -m src.mlops.drift_monitor --dry-run
 ```
 Generates HTML drift report in `drift_reports/` without triggering GitHub Actions.
 
 #### Train models manually
 ```bash
-python train.py --triggered-by local_dev
+python -m src.mlops.train --triggered-by local_dev
 ```
 Outputs:
 - `models/risk_classifier.json` — XGBoost model
 - `models/velocity_predictor.pkl` — sklearn Pipeline
-- `train.csv` — reference dataset for next drift check
+- `data/raw/train.csv` — reference dataset for next drift check
 - `mlruns/` — MLflow tracking directory
 
 View MLflow UI:
@@ -137,8 +137,8 @@ mlflow ui --backend-store-uri mlruns
 ```bash
 crontab -e
 # Add:
-0 2 * * * cd /path/to/JustSteer && /path/to/mlops/bin/python data_ingestion.py
-5 2 * * * cd /path/to/JustSteer && /path/to/mlops/bin/python drift_monitor.py
+0 2 * * * cd /path/to/JustSteer && /path/to/mlops/bin/python -m src.mlops.data_ingestion
+5 2 * * * cd /path/to/JustSteer && /path/to/mlops/bin/python -m src.mlops.drift_monitor
 ```
 
 #### 2. Configure GitHub Actions
@@ -161,7 +161,7 @@ Manually trigger drift detection:
 export GITHUB_TOKEN=ghp_your_pat_here
 export GITHUB_REPO_OWNER=your_username
 export GITHUB_REPO_NAME=JustSteer
-python drift_monitor.py
+python -m src.mlops.drift_monitor
 ```
 If drift is detected, check the GitHub Actions tab — `auto_retrain.yml` should start automatically.
 
@@ -169,21 +169,21 @@ If drift is detected, check the GitHub Actions tab — `auto_retrain.yml` should
 
 ## Configuration
 
-### data_ingestion.py
+### src/mlops/data_ingestion.py
 | Variable | Default | Description |
 |---|---|---|
 | `CHENNAI_LAT`, `CHENNAI_LON` | 13.0827, 80.2707 | Chennai coordinates for Open-Meteo |
 | `CHENNAI_BBOX` | 12.95–13.15, 80.15–80.35 | TomTom traffic flow bounding box |
 | `MAX_RETRIES` | 3 | HTTP retry attempts with exponential backoff |
 
-### drift_monitor.py
+### src/mlops/drift_monitor.py
 | Variable | Default | Description |
 |---|---|---|
 | `MONITORED_COLUMNS` | `["rainfall", "traffic_speed_kmh"]` | Features checked for drift |
 | `DRIFT_P_VALUE_THRESHOLD` | 0.05 | KS test significance level |
 | `LOOKBACK_DAYS` | 7 | Days of current data to compare |
 
-### train.py
+### src/mlops/train.py
 | Variable | Default | Description |
 |---|---|---|
 | `MIN_TRAIN_ROWS` | 50 | Minimum rows required to train |
@@ -270,7 +270,7 @@ colsample_bytree=0.8      # Column subsampling
 
 ### Trigger: `repository_dispatch` Event
 
-`drift_monitor.py` fires this webhook when drift is detected:
+`src/mlops/drift_monitor.py` fires this webhook when drift is detected:
 ```bash
 POST https://api.github.com/repos/{owner}/{repo}/dispatches
 {
@@ -295,12 +295,12 @@ on:
 2. **Log drift payload** — Parse `github.event.client_payload` and extract which columns drifted
 3. **Setup Python 3.11** — `actions/setup-python@v5` with pip caching keyed on `requirements-mlops.txt`
 4. **Install dependencies** — `pip install -r requirements-mlops.txt`
-5. **Restore DB from cache** — `actions/cache@v4` restores `daily_features.db` (avoids re-downloading API data)
-6. **Top-up ingestion** — Run `data_ingestion.py` to fetch today's latest data (best-effort)
-7. **Train models** — `python train.py --triggered-by drift_monitor_auto`
-8. **Post-retrain drift baseline** — `python drift_monitor.py --dry-run` (generates HTML report, no webhook)
+5. **Restore DB from cache** — `actions/cache@v4` restores `data/db/daily_features.db` (avoids re-downloading API data)
+6. **Top-up ingestion** — Run `python -m src.mlops.data_ingestion` to fetch today's latest data (best-effort)
+7. **Train models** — `python -m src.mlops.train --triggered-by drift_monitor_auto`
+8. **Post-retrain drift baseline** — `python -m src.mlops.drift_monitor --dry-run` (generates HTML report, no webhook)
 9. **Upload MLflow artifacts** — `actions/upload-artifact@v4` stores `mlruns/`, `models/`, `drift_reports/` for 30 days
-10. **Commit updated models** — `git add models/ train.csv && git commit && git push`
+10. **Commit updated models** — `git add models/ data/raw/train.csv && git commit && git push`
 11. **Write job summary** — Populate the GitHub Actions Summary tab with metrics
 
 ### Concurrency Control
@@ -316,24 +316,24 @@ Prevents two retrains from running in parallel (avoids git commit race condition
 
 ## Troubleshooting
 
-### `drift_monitor.py` fails with "Authentication failed (HTTP 401)"
+### `src/mlops/drift_monitor.py` fails with "Authentication failed (HTTP 401)"
 **Cause:** `GITHUB_TOKEN` doesn't have `repo:write` scope.
 
 **Fix:** Regenerate your GitHub Fine-grained PAT at [github.com/settings/tokens](https://github.com/settings/tokens) with:
 - Repository access: Select `JustSteer`
 - Permissions: `Contents: read+write`, `Actions: write`
 
-### `data_ingestion.py` hangs on TomTom API call
+### `src/mlops/data_ingestion.py` hangs on TomTom API call
 **Cause:** TomTom free-tier rate limit (2,500 requests/day) exceeded.
 
 **Fix:** Either:
 1. Wait until tomorrow (rate limits reset at midnight UTC)
 2. The script will fall back to synthetic traffic data (`speed = 40 km/h`) automatically
 
-### `train.py` fails with "Only X usable rows — need at least 50"
+### `src/mlops/train.py` fails with "Only X usable rows — need at least 50"
 **Cause:** Not enough data collected yet.
 
-**Fix:** Run `data_ingestion.py` multiple times (or let it run daily for a few days) until you have 50+ rows in `daily_features.db`.
+**Fix:** Run `python -m src.mlops.data_ingestion` multiple times (or let it run daily for a few days) until you have 50+ rows in `data/db/daily_features.db`.
 
 ### GitHub Actions workflow doesn't trigger
 **Cause 1:** `.github/workflows/auto_retrain.yml` isn't pushed to the repository.
@@ -343,7 +343,7 @@ git commit -m "feat: add auto-retrain workflow"
 git push
 ```
 
-**Cause 2:** `drift_monitor.py` uses the wrong `event_type`.
+**Cause 2:** `src/mlops/drift_monitor.py` uses the wrong `event_type`.
 Ensure the script sends `"event_type": "drift_detected"` (must match the workflow YAML).
 
 ### MLflow UI shows "No experiments found"

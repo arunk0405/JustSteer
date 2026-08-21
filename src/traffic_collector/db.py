@@ -69,7 +69,11 @@ def get_connection(db_path: Path = DEFAULT_DB_PATH) -> sqlite3.Connection:
 # ── Schema initialisation ─────────────────────────────────────────────────────
 
 def init_schema(conn: sqlite3.Connection) -> None:
-    """Creates tables and indexes if they don't already exist."""
+    """Creates tables and indexes if they don't already exist.
+    Also migrates existing traffic_snapshots tables to add the
+    UNIQUE(corridor_code, waypoint_index, sampled_at_utc) constraint
+    if it is missing (one-time migration for pre-existing DBs).
+    """
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS traffic_snapshots (
             id                  INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -88,7 +92,8 @@ def init_schema(conn: sqlite3.Connection) -> None:
             freeflow_speed_kmph REAL,
             congestion_index    REAL,
             congestion_level    TEXT,
-            confidence          REAL
+            confidence          REAL,
+            UNIQUE (corridor_code, waypoint_index, sampled_at_utc)
         );
 
         CREATE INDEX IF NOT EXISTS idx_snapshots_corridor_time
@@ -106,6 +111,74 @@ def init_schema(conn: sqlite3.Connection) -> None:
             duration_sec    REAL    NOT NULL,
             api_key_present INTEGER NOT NULL
         );
+    """)
+    conn.commit()
+
+    # One-time migration: add UNIQUE constraint to any pre-existing DB
+    # that was created before this constraint was introduced.
+    _migrate_unique_constraint(conn)
+
+
+def _migrate_unique_constraint(conn: sqlite3.Connection) -> None:
+    """
+    Rebuilds traffic_snapshots with the UNIQUE constraint if it is absent.
+    Deduplicates rows in the process (keeps the row with the lowest id).
+    Safe to call on a DB that is already up-to-date (no-op in that case).
+    """
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='traffic_snapshots'"
+    ).fetchone()
+    if row and "UNIQUE" in (row[0] or "").upper():
+        return  # Already constrained — nothing to do
+
+    conn.executescript("""
+        CREATE TABLE traffic_snapshots_new (
+            id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+            corridor_code       TEXT    NOT NULL,
+            corridor_name       TEXT    NOT NULL,
+            waypoint_index      INTEGER NOT NULL,
+            waypoint_lat        REAL    NOT NULL,
+            waypoint_lon        REAL    NOT NULL,
+            sampled_at_utc      TEXT    NOT NULL,
+            sampled_at_ist      TEXT    NOT NULL,
+            hour_ist            INTEGER NOT NULL,
+            day_of_week         INTEGER NOT NULL,
+            is_weekend          INTEGER NOT NULL,
+            month               INTEGER NOT NULL,
+            current_speed_kmph  REAL,
+            freeflow_speed_kmph REAL,
+            congestion_index    REAL,
+            congestion_level    TEXT,
+            confidence          REAL,
+            UNIQUE (corridor_code, waypoint_index, sampled_at_utc)
+        );
+
+        INSERT OR IGNORE INTO traffic_snapshots_new (
+            id, corridor_code, corridor_name, waypoint_index,
+            waypoint_lat, waypoint_lon,
+            sampled_at_utc, sampled_at_ist,
+            hour_ist, day_of_week, is_weekend, month,
+            current_speed_kmph, freeflow_speed_kmph,
+            congestion_index, congestion_level, confidence
+        )
+        SELECT
+            id, corridor_code, corridor_name, waypoint_index,
+            waypoint_lat, waypoint_lon,
+            sampled_at_utc, sampled_at_ist,
+            hour_ist, day_of_week, is_weekend, month,
+            current_speed_kmph, freeflow_speed_kmph,
+            congestion_index, congestion_level, confidence
+        FROM traffic_snapshots
+        ORDER BY id;
+
+        DROP TABLE traffic_snapshots;
+        ALTER TABLE traffic_snapshots_new RENAME TO traffic_snapshots;
+
+        CREATE INDEX IF NOT EXISTS idx_snapshots_corridor_time
+            ON traffic_snapshots (corridor_code, sampled_at_utc);
+
+        CREATE INDEX IF NOT EXISTS idx_snapshots_hour
+            ON traffic_snapshots (hour_ist, day_of_week);
     """)
     conn.commit()
 
@@ -132,7 +205,7 @@ def insert_snapshot(
     confidence: float,
 ) -> None:
     conn.execute("""
-        INSERT INTO traffic_snapshots (
+        INSERT OR IGNORE INTO traffic_snapshots (
             corridor_code, corridor_name, waypoint_index,
             waypoint_lat, waypoint_lon,
             sampled_at_utc, sampled_at_ist,

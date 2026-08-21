@@ -21,16 +21,16 @@ cp .env.example .env
 ### 3. Run the pipeline locally
 ```bash
 # Step 1: Ingest data
-python data_ingestion.py
-# → Creates daily_features.db with 24 hours of weather + traffic data
+python -m src.mlops.data_ingestion
+# → Creates data/db/daily_features.db with 24 hours of weather + traffic data
 
 # Step 2: Train initial models
-python train.py
-# → Creates models/risk_classifier.json, models/velocity_predictor.pkl, train.csv
+python -m src.mlops.train
+# → Creates models/risk_classifier.json, models/velocity_predictor.pkl, data/raw/train.csv
 # → Logs metrics to mlruns/ (view with: mlflow ui)
 
 # Step 3: Test drift detection (dry-run, no webhook)
-python drift_monitor.py --dry-run
+python -m src.mlops.drift_monitor --dry-run
 # → Generates drift_reports/drift_report_YYYYMMDD_HHMMSS.html
 ```
 
@@ -39,18 +39,18 @@ python drift_monitor.py --dry-run
 ## 📊 What You Just Built
 
 **Deliverable 1: Automated Data Ingestion** ✅
-- `data_ingestion.py` — Queries Open-Meteo (Chennai weather) + TomTom (traffic speeds)
-- Appends to `daily_features.db` (SQLite with deduplication)
+- `src/mlops/data_ingestion.py` — Queries Open-Meteo (Chennai weather) + TomTom (traffic speeds)
+- Appends to `data/db/daily_features.db` (SQLite with deduplication)
 - Retry logic, error handling, logging
 
 **Deliverable 2: Drift Detection + Webhook** ✅
-- `drift_monitor.py` — Evidently AI KS test on `rainfall` and `traffic_speed_kmh`
+- `src/mlops/drift_monitor.py` — Evidently AI KS test on `rainfall` and `traffic_speed_kmh`
 - p-value < 0.05 → triggers GitHub Actions `repository_dispatch` webhook
 - Falls back to saving JSON locally if GITHUB_TOKEN not set
 
 **Deliverable 3: GitHub Actions Retraining** ✅
 - `.github/workflows/auto_retrain.yml` — Listens for `drift_detected` event
-- Runs `train.py`, logs to MLflow, commits updated models/train.csv
+- Runs `python -m src.mlops.train`, logs to MLflow, commits updated models/train.csv
 - Job summary with drift details and metrics
 
 ---
@@ -61,11 +61,11 @@ python drift_monitor.py --dry-run
 ┌────────────────────────────────────────────────────────────────┐
 │                    DAILY AT 2:00 AM                            │
 │                                                                │
-│  data_ingestion.py → daily_features.db (new rows appended)    │
+│  python -m src.mlops.data_ingestion → data/db/daily_features.db (new rows appended)    │
 │          ↓                                                     │
-│  drift_monitor.py (2:05 AM)                                    │
-│    - Load train.csv (reference)                                │
-│    - Load last 7 days from daily_features.db (current)         │
+│  python -m src.mlops.drift_monitor (2:05 AM)                                    │
+│    - Load data/raw/train.csv (reference)                                │
+│    - Load last 7 days from data/db/daily_features.db (current)         │
 │    - Evidently ColumnDriftMetric (KS test)                     │
 │    - If p-value < 0.05 for rainfall OR traffic_speed:         │
 │        → POST github.com/repos/{owner}/{repo}/dispatches       │
@@ -76,13 +76,13 @@ python drift_monitor.py --dry-run
 │                  GITHUB ACTIONS (AUTO-TRIGGERED)               │
 │                                                                │
 │  .github/workflows/auto_retrain.yml                            │
-│    1. Restore daily_features.db from cache                     │
-│    2. python train.py --triggered-by drift_monitor_auto        │
+│    1. Restore data/db/daily_features.db from cache                     │
+│    2. python -m src.mlops.train --triggered-by drift_monitor_auto        │
 │       - Train XGBoost RiskClassifier (low/medium/high)         │
 │       - Train Ridge VelocityPredictor (traffic_speed_kmh)      │
 │       - Log metrics to MLflow                                  │
-│       - Export new train.csv (becomes reference for next drift)│
-│    3. git commit models/ train.csv && git push                 │
+│       - Export new data/raw/train.csv (becomes reference for next drift)│
+│    3. git commit models/ data/raw/train.csv && git push                 │
 └────────────────────────────────────────────────────────────────┘
                               ↓
                     MODELS AUTO-UPDATED ✅
@@ -99,7 +99,7 @@ export GITHUB_REPO_OWNER=your_username
 export GITHUB_REPO_NAME=JustSteer
 
 # Force a drift detection (will trigger if drift exists):
-python drift_monitor.py
+python -m src.mlops.drift_monitor
 
 # If drift is detected, check:
 # https://github.com/{owner}/{repo}/actions
@@ -112,9 +112,9 @@ python drift_monitor.py
 
 | File | Purpose |
 |---|---|
-| `data_ingestion.py` | Daily API data fetch → SQLite |
-| `drift_monitor.py` | Evidently KS test → webhook trigger |
-| `train.py` | XGBoost + Ridge training → MLflow |
+| `src/mlops/data_ingestion.py` | Daily API data fetch → SQLite |
+| `src/mlops/drift_monitor.py` | Evidently KS test → webhook trigger |
+| `src/mlops/train.py` | XGBoost + Ridge training → MLflow |
 | `.github/workflows/auto_retrain.yml` | GitHub Actions retraining pipeline |
 | `requirements-mlops.txt` | Python dependencies |
 | `.env.example` | Secrets template (copy to .env) |
@@ -124,8 +124,8 @@ python drift_monitor.py
 
 ## 🐛 Common Issues
 
-### Issue: `drift_monitor.py` says "No risk_label column found"
-**Fix:** Run `python train.py` first to generate `train.csv`.
+### Issue: `src/mlops/drift_monitor.py` says "No risk_label column found"
+**Fix:** Run `python -m src.mlops.train` first to generate `data/raw/train.csv`.
 
 ### Issue: TomTom API returns 403 Forbidden
 **Fix:** Set `TOMTOM_API_KEY` in `.env`. Script will fall back to synthetic traffic data if key is missing.
@@ -141,8 +141,8 @@ python drift_monitor.py
    ```bash
    crontab -e
    # Add:
-   0 2 * * * cd /path/to/JustSteer && /path/to/mlops/bin/python data_ingestion.py
-   5 2 * * * cd /path/to/JustSteer && /path/to/mlops/bin/python drift_monitor.py
+   0 2 * * * cd /path/to/JustSteer && /path/to/mlops/bin/python -m src.mlops.data_ingestion
+   5 2 * * * cd /path/to/JustSteer && /path/to/mlops/bin/python -m src.mlops.drift_monitor
    ```
 
 2. **View MLflow experiments:**
@@ -161,8 +161,8 @@ python drift_monitor.py
 
 ## ✅ Success Checklist
 
-- [ ] `daily_features.db` exists and has rows
-- [ ] `train.csv` exists (created by `train.py`)
+- [ ] `data/db/daily_features.db` exists and has rows
+- [ ] `data/raw/train.csv` exists (created by `train.py`)
 - [ ] `models/risk_classifier.json` and `models/velocity_predictor.pkl` exist
 - [ ] `mlruns/` directory contains experiment logs
 - [ ] `drift_reports/*.html` opens in browser and shows KS statistics

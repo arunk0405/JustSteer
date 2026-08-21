@@ -7,12 +7,12 @@
 # Can also run manually via: Actions → "Run workflow" button
 #
 # What it does:
-#   1. Checks out the repo with full history (so train.csv and models/ are available)
-#   2. Restores daily_features.db from the Actions cache (populated by the
+#   1. Checks out the repo with full history (so data/raw/train.csv and models/ are available)
+#   2. Restores data/db/daily_features.db from the Actions cache (populated by the
 #      ingestion job — avoids re-downloading all API data on every retrain)
 #   3. Installs Python dependencies
-#   4. Runs train.py — trains XGBoost + Ridge, logs to MLflow local store
-#   5. Commits the updated models/, train.csv, and mlruns/ back to the repo
+#   4. Runs python -m src.mlops.train — trains XGBoost + Ridge, logs to MLflow local store
+#   5. Commits the updated models/, data/raw/train.csv, and mlruns/ back to the repo
 #      so the next workflow run always starts from the latest checkpoint
 #   6. Uploads MLflow artifacts as a downloadable Actions artifact
 #   7. Annotates the summary with the drift payload that triggered the run
@@ -120,10 +120,10 @@ jobs:
         id: cache_db
         uses: actions/cache@v4
         with:
-          path: daily_features.db
+          path: data/db/daily_features.db
           # Cache key includes the date so each day gets a fresh cache slot;
           # restore-keys falls back to the most recent slot if today's isn't warm yet.
-          key: features-db-${{ runner.os }}-${{ hashFiles('daily_features.db') }}
+          key: features-db-${{ runner.os }}-${{ hashFiles('data/db/daily_features.db') }}
           restore-keys: |
             features-db-${{ runner.os }}-
 
@@ -134,7 +134,7 @@ jobs:
         env:
           TOMTOM_API_KEY: ${{ secrets.TOMTOM_API_KEY }}
         run: |
-          python data_ingestion.py || echo "Warning: data ingestion failed, continuing with cached data"
+          python -m src.mlops.data_ingestion || echo "Warning: data ingestion failed, continuing with cached data"
 
       # ── 7. Train models ───────────────────────────────────────────────────
       - name: Run train.py
@@ -152,7 +152,7 @@ jobs:
           fi
 
           # Run training and capture output
-          python train.py --triggered-by "$TRIGGER" | tee train_output.txt
+          python -m src.mlops.train --triggered-by "$TRIGGER" | tee train_output.txt
 
           # Extract the MLflow run ID from training output for downstream steps
           RUN_ID=$(grep "MLflow Run ID" train_output.txt | awk '{print $NF}' || echo "unknown")
@@ -164,7 +164,7 @@ jobs:
       # so you can compare pre-retrain vs post-retrain distributions.
       - name: Generate post-retrain drift baseline (dry-run)
         run: |
-          python drift_monitor.py --dry-run || echo "Drift baseline generation skipped (no train.csv yet)"
+          python -m src.mlops.drift_monitor --dry-run || echo "Drift baseline generation skipped (no train.csv yet)"
 
       # ── 9. Upload MLflow artifacts ────────────────────────────────────────
       - name: Upload MLflow run artifacts
@@ -193,7 +193,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
           # Stage only the relevant files
-          git add models/ train.csv || true
+          git add models/ data/raw/train.csv || true
 
           # Only commit if there are actual changes (avoids empty commits)
           if git diff --staged --quiet; then

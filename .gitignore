@@ -13,6 +13,7 @@ venv/
 
 # ── MLOps runtime artifacts ───────────────────────────────────────────────────
 daily_features.db
+data/traffic_history.db
 mlruns/
 drift_reports/
 *.log

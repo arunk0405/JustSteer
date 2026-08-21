@@ -37,10 +37,10 @@ pip install -r requirements.txt
 python sample_data/generate_sample_data.py
 
 # Run the engine on it
-python main.py --input sample_data/sample_delivery_data.csv
+python ingest_cli.py --input sample_data/sample_delivery_data.csv
 
 # Run it on YOUR dataset
-python main.py --input path/to/your_dataset.csv --target-col your_label_column
+python ingest_cli.py --input path/to/your_dataset.csv --target-col your_label_column
 ```
 
 Output lands in `output/processed_data.csv` and `output/schema_metadata.json`
@@ -65,7 +65,7 @@ strategy, quality gate limits, etc. Copy it and point `--config` at your
 copy rather than editing `src/ingestion/config.py` directly:
 
 ```bash
-python main.py --input data.csv --config configs/my_config.yaml
+python ingest_cli.py --input data.csv --config configs/my_config.yaml
 ```
 
 Key settings:
@@ -85,7 +85,7 @@ Key settings:
 
 ```
 .
-├── main.py                          # CLI entry point
+├── ingest_cli.py                    # CLI entry point
 ├── requirements.txt
 ├── pytest.ini
 ├── configs/
@@ -191,7 +191,7 @@ ordered waypoints used for traffic queries.
 
 ```bash
 # 1. Run Phase 1 ingestion first (produces output/processed_data.csv)
-python main.py --input sample_data/sample_delivery_data.csv
+python ingest_cli.py --input sample_data/sample_delivery_data.csv
 
 # 2. Enrich with context (no API keys needed — uses dry_run automatically)
 python -m src.context.enricher

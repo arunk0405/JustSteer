@@ -5,12 +5,12 @@
 # Runs every 30 minutes (on the hour and half-hour) to populate two SQLite
 # databases:
 #
-#   daily_features.db            ← data_ingestion.py (root-level script)
+#   data/db/daily_features.db            ← src/mlops/data_ingestion.py
 #       Table : features(timestamp, location_key, rainfall, temperature_c,
 #                        wind_speed_kmh, traffic_speed_kmh, feature_source)
 #       Sources: Open-Meteo (free, no key)    — weather
 #                TomTom Flow API (4 points)   — traffic speed proxy
-#       Used by: drift_monitor.py, train.py
+#       Used by: src/mlops/drift_monitor.py, src/mlops/train.py
 #
 #   data/traffic_history.db      ← src/traffic_collector/collector.py
 #       Table : traffic_snapshots  (corridor-level TomTom readings)
@@ -80,6 +80,9 @@ jobs:
     name: Collect Traffic & Weather Data
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: write   # needed to push the data-sync branch
+
     outputs:
       features_inserted: ${{ steps.ingest.outputs.features_inserted }}
       traffic_success:   ${{ steps.collect_traffic.outputs.success_count }}
@@ -120,7 +123,7 @@ jobs:
         id: cache_features_restore
         uses: actions/cache/restore@v4
         with:
-          path: daily_features.db
+          path: data/db/daily_features.db
           # Exact key won't exist (includes run_number), so we always restore
           # via the prefix restore-key (most recent save from any earlier run).
           key: features-db-${{ runner.os }}-${{ env.TODAY }}-latest
@@ -140,7 +143,8 @@ jobs:
             traffic-db-${{ runner.os }}-
 
       # ── 8. Run data_ingestion.py → daily_features.db ────────────────────────
-      # Fetches the last 24 h of Open-Meteo weather + TomTom spot-check speeds.
+      # Fetches Open-Meteo weather + TomTom spot-check speeds.
+      # Automatically fetches only new data since the last DB timestamp.
       # INSERT OR IGNORE deduplicates on (timestamp, location_key).
       - name: Run data ingestion (features DB)
         id: ingest
@@ -151,14 +155,20 @@ jobs:
             echo "DRY RUN — skipping data_ingestion.py"
             echo "features_inserted=0" >> "$GITHUB_OUTPUT"
           else
-            python data_ingestion.py 2>&1 | tee ingest_output.txt
+            # Build optional --hours-lookback argument if provided
+            HOURS_ARG=""
+            if [ -n "${{ github.event.inputs.hours_lookback }}" ]; then
+              HOURS_ARG="--hours-lookback ${{ github.event.inputs.hours_lookback }}"
+            fi
+
+            python -m src.mlops.data_ingestion $HOURS_ARG 2>&1 | tee ingest_output.txt
 
             # Pull inserted-row count from the script's own log line:
             # "=== Data Ingestion Complete: N new rows ==="
             INSERTED=$(grep -oP 'Complete: \K[0-9]+(?= new rows)' ingest_output.txt \
                        | tail -1 || echo "0")
             echo "features_inserted=${INSERTED}" >> "$GITHUB_OUTPUT"
-            echo "data_ingestion.py → ${INSERTED} new rows in daily_features.db"
+            echo "data_ingestion.py → ${INSERTED} new rows in data/db/daily_features.db"
           fi
 
       # ── 9. Run collector.py → data/traffic_history.db ───────────────────────
@@ -190,10 +200,10 @@ jobs:
       - name: Print DB row counts
         if: always()
         run: |
-          echo "=== daily_features.db ==="
+          echo "=== data/db/daily_features.db ==="
           python - <<'PYEOF'
           import sqlite3, pathlib
-          db = pathlib.Path("daily_features.db")
+          db = pathlib.Path("data/db/daily_features.db")
           if db.exists():
               conn = sqlite3.connect(db)
               n       = conn.execute("SELECT COUNT(*) FROM features").fetchone()[0]
@@ -229,7 +239,7 @@ jobs:
         if: ${{ github.event.inputs.dry_run != 'true' && always() }}
         uses: actions/cache/save@v4
         with:
-          path: daily_features.db
+          path: data/db/daily_features.db
           key: features-db-${{ runner.os }}-${{ env.TODAY }}-${{ github.run_number }}
 
       # ── 12. Save traffic_history.db to cache ─────────────────────────────────
@@ -240,7 +250,101 @@ jobs:
           path: data/traffic_history.db
           key: traffic-db-${{ runner.os }}-${{ env.TODAY }}-${{ github.run_number }}
 
-      # ── 13. Upload DB snapshots as downloadable artifacts ────────────────────
+      # ── 13. Push DBs to data-sync branch ─────────────────────────────────────
+      # Commits daily_features.db and data/traffic_history.db to a dedicated
+      # orphan-style branch (data-sync) so they can be pulled locally without
+      # polluting the main branch history.
+      #
+      # Strategy:
+      #   • git worktree add  → check out data-sync into a temp dir
+      #     (creates the branch as an orphan on first run)
+      #   • Copy both DBs into the worktree
+      #   • git commit + push  — only if at least one DB exists
+      #
+      # Requires: GITHUB_TOKEN has contents: write permission (granted below).
+      # The data-sync branch carries its own .gitignore that does NOT ignore
+      # the DB files; that file is seeded on first run here.
+      - name: Push DBs to data-sync branch
+        if: ${{ github.event.inputs.dry_run != 'true' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          SYNC_DIR="$(mktemp -d)/data-sync"
+
+          # Configure git identity for the bot commit
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Authenticate push via token
+          git remote set-url origin \
+            "https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git"
+
+          # Fetch existing data-sync branch if it exists (ignore error on first run)
+          git fetch origin data-sync:data-sync 2>/dev/null || true
+
+          # Check whether the branch already exists on the remote
+          if git show-ref --verify --quiet refs/heads/data-sync; then
+            # Branch exists locally (fetched above) — add as a worktree
+            git worktree add "$SYNC_DIR" data-sync
+          else
+            # First run — create an orphan worktree (no parent commits)
+            git worktree add --orphan -b data-sync "$SYNC_DIR"
+          fi
+
+          # ── Seed .gitignore on the data-sync branch (only once) ──────────
+          GITIGNORE_PATH="$SYNC_DIR/.gitignore"
+          if [ ! -f "$GITIGNORE_PATH" ]; then
+            cat > "$GITIGNORE_PATH" << 'GITIGNORE_EOF'
+          # data-sync branch: DB files are intentionally tracked here.
+          # Everything else should be ignored so nothing leaks from main.
+          *
+          !.gitignore
+          !data/db/daily_features.db
+          !data/
+          !data/traffic_history.db
+          GITIGNORE_EOF
+          fi
+
+          # ── Copy DBs into the worktree ────────────────────────────────────
+          HAS_DB=0
+
+          if [ -f "data/db/daily_features.db" ]; then
+            mkdir -p "$SYNC_DIR/data/db"
+            cp data/db/daily_features.db "$SYNC_DIR/data/db/daily_features.db"
+            HAS_DB=1
+          fi
+
+          if [ -f "data/traffic_history.db" ]; then
+            mkdir -p "$SYNC_DIR/data"
+            cp data/traffic_history.db "$SYNC_DIR/data/traffic_history.db"
+            HAS_DB=1
+          fi
+
+          if [ "$HAS_DB" = "0" ]; then
+            echo "No DB files found — skipping data-sync push."
+            git worktree remove --force "$SYNC_DIR"
+            exit 0
+          fi
+
+          # ── Commit and push ───────────────────────────────────────────────
+          cd "$SYNC_DIR"
+          git add -A
+
+          # Only commit if there are actual changes (avoids empty commits)
+          if git diff --cached --quiet; then
+            echo "No changes in DBs since last push — skipping commit."
+          else
+            TIMESTAMP=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
+            git commit -m "data-sync: ${TIMESTAMP} (run #${{ github.run_number }})"
+            git push origin data-sync
+            echo "data-sync branch updated."
+          fi
+
+          # ── Cleanup ───────────────────────────────────────────────────────
+          cd "${{ github.workspace }}"
+          git worktree remove --force "$SYNC_DIR"
+
+      # ── 14. Upload DB snapshots as downloadable artifacts ────────────────────
       # Provides a 7-day backup you can download from the Actions UI.
       - name: Upload DB snapshots as artifacts
         if: always()
@@ -248,12 +352,12 @@ jobs:
         with:
           name: db-snapshots-${{ github.run_number }}
           path: |
-            daily_features.db
+            data/db/daily_features.db
             data/traffic_history.db
           retention-days: 7
           if-no-files-found: warn
 
-      # ── 14. Write job summary ─────────────────────────────────────────────────
+      # ── 15. Write job summary ─────────────────────────────────────────────────
       - name: Write job summary
         if: always()
         run: |
@@ -289,7 +393,7 @@ jobs:
             fi
           } >> "$GITHUB_STEP_SUMMARY"
 
-      # ── 15. Gate: fail job if both scripts collected zero rows ────────────────
+      # ── 16. Gate: fail job if both scripts collected zero rows ────────────────
       # A single partial failure is expected occasionally (API blip); only fail
       # hard if NOTHING was collected at all.
       - name: Fail if no data was collected
