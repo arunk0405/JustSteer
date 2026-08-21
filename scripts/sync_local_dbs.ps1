@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
     Pulls the latest DB snapshots from the GitHub Actions data-sync branch
     and merges them into your local SQLite databases without losing any rows.
@@ -100,7 +100,7 @@ Write-OK "Repo root: $RepoRoot"
 # ── Fetch the data-sync branch ───────────────────────────────────────────────
 Write-Step "Fetching data-sync branch from origin..."
 
-git fetch origin data-sync 2>&1 | ForEach-Object { Write-Host "    $_" }
+cmd /c "git fetch origin data-sync 2>&1" | ForEach-Object { Write-Host "    $_" }
 
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Failed to fetch origin/data-sync. Has the cron job run at least once?"
@@ -131,7 +131,7 @@ if (Test-Path $WorktreeDir) {
 # ── Add a temporary worktree for data-sync ───────────────────────────────────
 Write-Step "Checking out data-sync branch into temporary worktree..."
 
-git worktree add $WorktreeDir origin/data-sync 2>&1 | ForEach-Object { Write-Host "    $_" }
+cmd /c "git worktree add `"$WorktreeDir`" origin/data-sync 2>&1" | ForEach-Object { Write-Host "    $_" }
 
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Failed to create worktree. See output above."
