@@ -69,6 +69,12 @@ on:
         description: "Weather hours to fetch in data_ingestion.py (default 24)"
         required: false
         default: "24"
+      force_pull_from_data_sync:
+        description: "Force pull DBs from data-sync branch (overwrites cache with manual uploads)"
+        required: false
+        default: "false"
+        type: choice
+        options: ["false", "true"]
 
 # Allow concurrent runs (successive half-hour ticks may overlap on slow networks)
 concurrency:
@@ -141,6 +147,19 @@ jobs:
           restore-keys: |
             traffic-db-${{ runner.os }}-${{ env.TODAY }}-
             traffic-db-${{ runner.os }}-
+
+      # ── 7b. Force pull DBs from data-sync branch (if requested) ─────────────
+      - name: Force pull DBs from data-sync
+        if: ${{ github.event.inputs.force_pull_from_data_sync == 'true' }}
+        run: |
+          echo "Force pull requested. Fetching data-sync branch..."
+          git fetch origin data-sync:data-sync || true
+          if git show-ref --verify --quiet refs/heads/data-sync; then
+            echo "Checking out DBs from data-sync branch..."
+            git checkout data-sync -- data/db/daily_features.db data/traffic_history.db || echo "Some DBs not found in data-sync branch"
+          else
+            echo "data-sync branch not found on remote."
+          fi
 
       # ── 8. Run data_ingestion.py → daily_features.db ────────────────────────
       # Fetches Open-Meteo weather + TomTom spot-check speeds.

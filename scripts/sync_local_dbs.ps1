@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Pulls the latest DB snapshots from the GitHub Actions data-sync branch
     and merges them into your local SQLite databases without losing any rows.
@@ -11,7 +11,7 @@
     This script:
       1. Adds a temporary git worktree for the data-sync branch
       2. Runs scripts/merge_artifact_db.py to merge the remote DBs into
-         your local ones (INSERT OR IGNORE — zero data loss)
+         your local ones (INSERT OR IGNORE - zero data loss)
       3. Removes the worktree
 
     Run this whenever you want to pull the latest cloud-collected data.
@@ -28,7 +28,7 @@
     .\scripts\sync_local_dbs.ps1
 
 .EXAMPLE
-    # Preview only — no writes
+    # Preview only - no writes
     .\scripts\sync_local_dbs.ps1 -DryRun
 
 .EXAMPLE
@@ -121,7 +121,7 @@ if ($LastCommit) {
 
 # ── Clean up any leftover worktree from a previous interrupted run ────────────
 if (Test-Path $WorktreeDir) {
-    Write-Warn "Leftover worktree found at $WorktreeDir — removing it first."
+    Write-Warn "Leftover worktree found at $WorktreeDir - removing it first."
     git worktree remove --force $WorktreeDir 2>$null
     if (Test-Path $WorktreeDir) {
         Remove-Item -Recurse -Force $WorktreeDir
@@ -169,7 +169,7 @@ $MergeArgs = @(
 
 if ($DryRun) {
     $MergeArgs += "--dry-run"
-    Write-Step "DRY RUN — previewing merge (no writes)..."
+    Write-Step "DRY RUN - previewing merge (no writes)..."
 } else {
     Write-Step "Merging remote DBs into local databases..."
 }
@@ -186,13 +186,13 @@ Pop-Location
 # ── Final status ──────────────────────────────────────────────────────────────
 if ($MergeExitCode -eq 0) {
     if ($DryRun) {
-        Write-Host "`nDry run complete — no data was changed." -ForegroundColor Cyan
+        Write-Host "`nDry run complete - no data was changed." -ForegroundColor Cyan
     } else {
         Write-Host "`nSync complete. Your local DBs are up to date." -ForegroundColor Green
         Write-Host "    Run: sqlite3 data/traffic_history.db `"SELECT MAX(sampled_at_ist) FROM traffic_snapshots;`"" -ForegroundColor DarkGray
         Write-Host "    to confirm the newest record." -ForegroundColor DarkGray
     }
 } else {
-    Write-Host "`nMerge script exited with code $MergeExitCode — check output above." -ForegroundColor Red
+    Write-Host "`nMerge script exited with code $MergeExitCode - check output above." -ForegroundColor Red
     exit $MergeExitCode
 }
