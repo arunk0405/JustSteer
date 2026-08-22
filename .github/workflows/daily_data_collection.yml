@@ -387,7 +387,7 @@ jobs:
             echo "|---|---|"
             echo "| **Trigger** | \`${{ github.event_name }}\` |"
             echo "| **Dry-run** | \`${{ github.event.inputs.dry_run || 'false' }}\` |"
-            echo "| **Features inserted** | \`${{ steps.ingest.outputs.features_inserted != '' && steps.ingest.outputs.features_inserted || 'N/A' }}\` |"
+            echo "| **Features inserted** | \`${{ steps.ingest.outputs.features_inserted == '' && 'N/A' || steps.ingest.outputs.features_inserted }}\` |"
             echo "| **Traffic waypoints** | \`${{ steps.collect_traffic.outputs.success_count || '?' }}/${{ steps.collect_traffic.outputs.total_count || '?' }}\` |"
             echo "| **Run number** | \`${{ github.run_number }}\` |"
             echo ""
@@ -437,4 +437,5 @@ jobs:
                  "(check TOMTOM_API_KEY and corridor config)"
 
           exit 0
+
 
