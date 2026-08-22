@@ -24,4 +24,4 @@ train_output.txt
 # models/
 
 # ── Virtual environments ──────────────────────────────────────────────────────
-mlops/
+/mlops/
