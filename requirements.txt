@@ -11,3 +11,4 @@ cachetools>=5.3
 
 # API key loading — used by data_ingestion.py and src/traffic_collector/collector.py
 python-dotenv>=1.0.0
+networkx>=3.0
