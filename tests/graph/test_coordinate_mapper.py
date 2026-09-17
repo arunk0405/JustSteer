@@ -1,174 +1,194 @@
-import pytest
+"""Offline tests for the coordinate-to-nearest-node mapping boundary."""
+
+from __future__ import annotations
+
+import copy
 import math
+from pathlib import Path
+
 import networkx as nx
+import pytest
 
 from src.graph.coordinate_mapper import (
-    find_nearest_node,
     CoordinateValidationError,
     NodeMappingError,
-    NodeMatch
+    find_nearest_node,
 )
 from src.graph.graph_validator import RoadNetworkValidationError
 
-def create_test_graph():
-    """Creates a small valid synthetic graph for coordinate mapping tests."""
-    G = nx.MultiDiGraph(crs="epsg:4326")
-    G.add_node(1, x=80.1, y=13.1)
-    G.add_node(2, x=80.2, y=13.2)
-    G.add_node(3, x=80.3, y=13.3)
-    
-    G.add_edge(1, 2, key=0, length=15.0)
-    G.add_edge(2, 3, key=0, length=20.5)
-    return G
 
-def test_exact_coordinate_match():
-    # Test 24
-    G = create_test_graph()
-    
-    # Query exactly node 2 (lat=13.2, lon=80.2)
-    result = find_nearest_node(G, latitude=13.2, longitude=80.2)
-    
-    assert result.node_id == 2
-    assert math.isclose(result.snap_distance_m, 0.0, abs_tol=1.0)
-    assert result.matched_latitude == 13.2
-    assert result.matched_longitude == 80.2
+def create_test_graph() -> nx.MultiDiGraph:
+    """Create a small WGS84 graph whose nearest nodes are unambiguous."""
+    graph = nx.MultiDiGraph(crs="epsg:4326")
+    graph.add_node(1, x=80.0000, y=13.0000)
+    graph.add_node(2, x=80.0200, y=13.0000)
+    graph.add_node(3, x=80.0000, y=13.0200)
+    graph.add_edge(1, 2, key=0, length=20.0)
+    graph.add_edge(2, 3, key=0, length=25.0)
+    return graph
 
-def test_nearest_node_selection():
-    # Test 25
-    G = create_test_graph()
-    
-    # Query a point very close to node 1 (13.1, 80.1)
-    result = find_nearest_node(G, latitude=13.1001, longitude=80.1001)
-    
+
+def test_exact_coordinate_match_returns_matching_node_and_zero_distance() -> None:
+    result = find_nearest_node(create_test_graph(), latitude=13.0, longitude=80.0)
+
     assert result.node_id == 1
-    assert result.snap_distance_m > 0
-    assert result.snap_distance_m < 100 # Should be ~15m
-    assert result.matched_latitude == 13.1
-    assert result.matched_longitude == 80.1
+    assert result.matched_latitude == 13.0
+    assert result.matched_longitude == 80.0
+    assert result.snap_distance_m == pytest.approx(0.0, abs=1e-6)
 
-def test_coordinate_ordering():
-    # Test 26
-    G = create_test_graph()
-    
-    # Reversing latitude and longitude will place it somewhere in the Arctic Ocean (lat=80.1, lon=13.1)
-    # The nearest node mapping handles it, but distance should be massive
-    result = find_nearest_node(G, latitude=80.1, longitude=13.1)
-    
-    assert result.node_id in [1, 2, 3]
-    assert result.snap_distance_m > 5000000 # Distance should be > 5,000 km
-    assert result.matched_latitude in [13.1, 13.2, 13.3]
-    
-def test_snap_distance_properties():
-    # Test 27
-    G = create_test_graph()
-    result = find_nearest_node(G, latitude=13.1001, longitude=80.1001)
-    
-    assert result.snap_distance_m >= 0
-    assert math.isfinite(result.snap_distance_m)
 
-def test_invalid_latitude():
-    # Test 28
-    G = create_test_graph()
+def test_nearby_coordinate_selects_expected_nearest_node_and_distance() -> None:
+    result = find_nearest_node(create_test_graph(), latitude=13.0001, longitude=80.0001)
+
+    assert result.node_id == 1
+    assert result.snap_distance_m == pytest.approx(15.5, abs=1.5)
+
+
+def test_multiple_candidate_nodes_choose_the_unambiguous_nearest_node() -> None:
+    result = find_nearest_node(create_test_graph(), latitude=13.0185, longitude=80.0002)
+
+    assert result.node_id == 3
+
+
+def test_public_latitude_longitude_order_maps_to_osm_y_x() -> None:
+    graph = nx.MultiDiGraph(crs="epsg:4326")
+    graph.add_node(10, x=80.0, y=13.0)
+    graph.add_node(20, x=13.0, y=80.0)
+    graph.add_edge(10, 20, key=0, length=1.0)
+
+    result = find_nearest_node(graph, latitude=13.0, longitude=80.0)
+
+    assert result.node_id == 10
+    assert (result.matched_latitude, result.matched_longitude) == (13.0, 80.0)
+
+
+@pytest.mark.parametrize("latitude", [90.1, -90.1, None, "invalid", [], {}, True])
+def test_invalid_latitude_is_rejected(latitude: object) -> None:
     with pytest.raises(CoordinateValidationError):
-        find_nearest_node(G, latitude=90.1, longitude=80.1)
+        find_nearest_node(create_test_graph(), latitude=latitude, longitude=80.0)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("longitude", [180.1, -180.1, None, "invalid", [], {}, False])
+def test_invalid_longitude_is_rejected(longitude: object) -> None:
     with pytest.raises(CoordinateValidationError):
-        find_nearest_node(G, latitude=-90.1, longitude=80.1)
+        find_nearest_node(create_test_graph(), latitude=13.0, longitude=longitude)  # type: ignore[arg-type]
 
-def test_invalid_longitude():
-    # Test 29
-    G = create_test_graph()
+
+@pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
+def test_non_finite_coordinates_are_rejected(value: float) -> None:
+    graph = create_test_graph()
     with pytest.raises(CoordinateValidationError):
-        find_nearest_node(G, latitude=13.1, longitude=180.1)
+        find_nearest_node(graph, latitude=value, longitude=80.0)
     with pytest.raises(CoordinateValidationError):
-        find_nearest_node(G, latitude=13.1, longitude=-180.1)
+        find_nearest_node(graph, latitude=13.0, longitude=value)
 
-def test_nan_infinity_coordinates():
-    # Test 30
-    G = create_test_graph()
-    invalid_vals = [float('nan'), float('inf'), float('-inf')]
-    for val in invalid_vals:
-        with pytest.raises(CoordinateValidationError):
-            find_nearest_node(G, latitude=val, longitude=80.1)
-        with pytest.raises(CoordinateValidationError):
-            find_nearest_node(G, latitude=13.1, longitude=val)
-            
-def test_missing_coordinates():
-    # Test 31 (Handled by graph validator)
-    G = create_test_graph()
-    G.add_node(4, x=80.4) # Missing y
-    
-    # Catch Exception since import paths might differ, but check the name
-    with pytest.raises(Exception) as excinfo:
-        find_nearest_node(G, latitude=13.1, longitude=80.1)
-    assert "RoadNetworkValidationError" in type(excinfo.value).__name__
 
-def test_empty_graph():
-    # Test 32
-    G = nx.MultiDiGraph(crs="epsg:4326")
-    with pytest.raises(Exception) as excinfo:
-        find_nearest_node(G, latitude=13.1, longitude=80.1)
-    assert "RoadNetworkValidationError" in type(excinfo.value).__name__
+def test_empty_graph_is_rejected() -> None:
+    with pytest.raises(RoadNetworkValidationError, match="contains no nodes"):
+        find_nearest_node(nx.MultiDiGraph(crs="epsg:4326"), latitude=13.0, longitude=80.0)
 
-def test_wrong_graph_type():
-    # Test 33
-    G = nx.Graph()
-    with pytest.raises(Exception) as excinfo:
-        find_nearest_node(G, latitude=13.1, longitude=80.1)
-    assert "RoadNetworkValidationError" in type(excinfo.value).__name__
 
-def test_distant_out_of_network_coordinate():
-    # Test 35
-    G = create_test_graph()
-    # Query a point in New York (lat=40.7128, lon=-74.0060)
-    result = find_nearest_node(G, latitude=40.7128, longitude=-74.0060)
-    assert result.snap_distance_m > 1000000 # Distance should be > 1,000 km
-    
-def test_maximum_snap_distance():
-    # Test 36
-    G = create_test_graph()
-    # Distance to 13.1001, 80.1001 from node 1 is ~15m
-    
-    # Threshold < distance -> failure
+@pytest.mark.parametrize("graph", [nx.Graph(), nx.DiGraph(), nx.MultiGraph()])
+def test_unsuitable_graph_types_are_rejected(graph: nx.Graph) -> None:
+    with pytest.raises(RoadNetworkValidationError, match="MultiDiGraph"):
+        find_nearest_node(graph, latitude=13.0, longitude=80.0)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("missing_attribute", ["x", "y"])
+def test_missing_node_coordinates_are_rejected(missing_attribute: str) -> None:
+    graph = nx.MultiDiGraph(crs="epsg:4326")
+    node_data = {"x": 80.0, "y": 13.0}
+    del node_data[missing_attribute]
+    graph.add_node(1, **node_data)
+
+    with pytest.raises(RoadNetworkValidationError, match="coordinate attributes"):
+        find_nearest_node(graph, latitude=13.0, longitude=80.0)
+
+
+def test_graph_without_crs_is_rejected_without_being_repaired() -> None:
+    graph = create_test_graph()
+    del graph.graph["crs"]
+
+    with pytest.raises(RoadNetworkValidationError, match="missing graph CRS"):
+        find_nearest_node(graph, latitude=13.0, longitude=80.0)
+    assert "crs" not in graph.graph
+
+
+def test_distant_coordinate_returns_nearest_node_and_large_distance_by_default() -> None:
+    result = find_nearest_node(create_test_graph(), latitude=40.7128, longitude=-74.0060)
+
+    assert result.node_id in {1, 2, 3}
+    assert result.snap_distance_m > 1_000_000
+
+
+def test_optional_maximum_snap_distance_is_caller_controlled() -> None:
+    graph = create_test_graph()
+    result = find_nearest_node(graph, latitude=13.0001, longitude=80.0001, max_snap_distance_m=100.0)
+    assert result.node_id == 1
+
     with pytest.raises(NodeMappingError, match="exceeds maximum allowed snap distance"):
-        find_nearest_node(G, latitude=13.1001, longitude=80.1001, max_snap_distance_m=1.0)
-        
-    # Threshold > distance -> success
-    result = find_nearest_node(G, latitude=13.1001, longitude=80.1001, max_snap_distance_m=100.0)
-    assert result.node_id == 1
+        find_nearest_node(graph, latitude=13.0001, longitude=80.0001, max_snap_distance_m=1.0)
 
-def test_result_consistency():
-    # Test 37
-    G = create_test_graph()
-    result = find_nearest_node(G, latitude=13.1001, longitude=80.1001)
-    
-    assert result.node_id in G.nodes
-    assert result.matched_latitude == G.nodes[result.node_id]["y"]
-    assert result.matched_longitude == G.nodes[result.node_id]["x"]
 
-def test_graph_immutability():
-    # Test 38
-    G = create_test_graph()
-    before_nodes = G.number_of_nodes()
-    before_edges = G.number_of_edges()
-    
-    find_nearest_node(G, latitude=13.1001, longitude=80.1001)
-    
-    assert G.number_of_nodes() == before_nodes
-    assert G.number_of_edges() == before_edges
+@pytest.mark.parametrize("limit", [-1, float("nan"), float("inf"), "100", True])
+def test_invalid_maximum_snap_distance_is_rejected(limit: object) -> None:
+    with pytest.raises(CoordinateValidationError):
+        find_nearest_node(create_test_graph(), 13.0, 80.0, max_snap_distance_m=limit)  # type: ignore[arg-type]
 
-def test_parallel_edges_remain_untouched():
-    # Test 39
-    G = create_test_graph()
-    G.add_edge(1, 2, key=1, length=16.0) # Add a parallel edge
-    before_edges = G.number_of_edges()
-    
-    find_nearest_node(G, latitude=13.1001, longitude=80.1001)
-    
-    assert G.number_of_edges() == before_edges
-    assert G.number_of_edges(1, 2) == 2
 
-def test_backend_component_independence():
-    # Test 41
-    # We are successfully calling it as a standard python function
-    # without any API frameworks throughout this entire test suite.
-    assert True
+def test_result_is_consistent_with_the_matched_graph_node() -> None:
+    graph = create_test_graph()
+    result = find_nearest_node(graph, latitude=13.0001, longitude=80.0001)
+
+    assert result.node_id in graph
+    assert result.matched_latitude == graph.nodes[result.node_id]["y"]
+    assert result.matched_longitude == graph.nodes[result.node_id]["x"]
+    assert math.isfinite(result.snap_distance_m)
+    assert result.snap_distance_m >= 0
+
+
+def test_mapping_is_strictly_read_only_including_graph_metadata_and_attributes() -> None:
+    graph = create_test_graph()
+    before_graph = copy.deepcopy(graph.graph)
+    before_nodes = {node: copy.deepcopy(data) for node, data in graph.nodes(data=True)}
+    before_edges = {
+        (source, target, key): copy.deepcopy(data)
+        for source, target, key, data in graph.edges(keys=True, data=True)
+    }
+
+    find_nearest_node(graph, latitude=13.0001, longitude=80.0001)
+
+    assert graph.graph == before_graph
+    assert {node: data for node, data in graph.nodes(data=True)} == before_nodes
+    assert {
+        (source, target, key): data
+        for source, target, key, data in graph.edges(keys=True, data=True)
+    } == before_edges
+
+
+def test_parallel_edges_are_preserved() -> None:
+    graph = create_test_graph()
+    graph.add_edge(1, 2, key=1, length=21.0)
+
+    find_nearest_node(graph, latitude=13.0001, longitude=80.0001)
+
+    assert graph.number_of_edges(1, 2) == 2
+    assert set(graph[1][2]) == {0, 1}
+
+
+def test_mapper_has_no_api_routing_or_graph_lifecycle_dependencies() -> None:
+    mapper_path = Path(__file__).resolve().parents[2] / "src/graph/coordinate_mapper.py"
+    source = mapper_path.read_text(encoding="utf-8").lower()
+    forbidden_references = (
+        "fastapi",
+        "pydantic",
+        "flask",
+        "django",
+        "load_road_network",
+        "save_road_network",
+        "download_road_network",
+        "astar",
+        "traffic",
+        "safety",
+    )
+    assert not any(reference in source for reference in forbidden_references)

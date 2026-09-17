@@ -42,7 +42,7 @@ def save_road_network(graph: nx.MultiDiGraph, path: str | Path, overwrite: bool 
         RoadNetworkValidationError: If the graph is invalid.
         FileExistsError: If the file exists and overwrite is False.
     """
-    from graph.graph_validator import validate_road_network
+    from .graph_validator import validate_road_network
     
     # 1. Validate before saving
     validate_road_network(graph)
@@ -79,7 +79,7 @@ def load_road_network(path: str | Path) -> nx.MultiDiGraph:
         RuntimeError: If the file is unreadable or corrupt.
         RoadNetworkValidationError: If the loaded graph fails structural validation.
     """
-    from graph.graph_validator import validate_road_network
+    from .graph_validator import validate_road_network
     
     path_obj = Path(path)
     if not path_obj.exists() or not path_obj.is_file():
