@@ -29,7 +29,7 @@ def test_optimize_empty():
     builder = PairwiseRouteMatrixBuilder(service)
     optimizer = BruteForceSequenceOptimizer(builder)
     
-    req = DeliverySequenceRequest("A", ())
+    req = DeliverySequenceRequest(1, ())
     res = optimizer.optimize(req)
     
     assert res.total_cost == 0.0
@@ -37,61 +37,61 @@ def test_optimize_empty():
 
 
 def test_optimize_single():
-    service = FakePairwiseRoutingService({("A", "B"): 5.0})
+    service = FakePairwiseRoutingService({(1, 2): 5.0})
     builder = PairwiseRouteMatrixBuilder(service)
     optimizer = BruteForceSequenceOptimizer(builder)
     
-    req = DeliverySequenceRequest("A", ("B",))
+    req = DeliverySequenceRequest(1, (2,))
     res = optimizer.optimize(req)
     
     assert res.total_cost == 5.0
-    assert res.delivery_sequence.sequence == ("B",)
+    assert res.delivery_sequence.sequence == (2,)
 
 
 def test_optimize_multiple():
     # A->B=1, B->C=2 (cost 3)
     # A->C=4, C->B=5 (cost 9)
     service = FakePairwiseRoutingService({
-        ("A", "B"): 1.0,
-        ("A", "C"): 4.0,
-        ("B", "C"): 2.0,
-        ("C", "B"): 5.0
+        (1, 2): 1.0,
+        (1, 3): 4.0,
+        (2, 3): 2.0,
+        (3, 2): 5.0
     })
     builder = PairwiseRouteMatrixBuilder(service)
     optimizer = BruteForceSequenceOptimizer(builder)
     
-    req = DeliverySequenceRequest("A", ("B", "C"))
+    req = DeliverySequenceRequest(1, (2, 3))
     res = optimizer.optimize(req)
     
     assert res.total_cost == 3.0
-    assert res.delivery_sequence.sequence == ("B", "C")
+    assert res.delivery_sequence.sequence == (2, 3)
 
 
 def test_optimize_with_start_in_deliveries():
     # Start=A, deliveries=[A, B]
     service = FakePairwiseRoutingService({
-        ("A", "A"): 0.0,
-        ("A", "B"): 3.0,
+        (1, 1): 0.0,
+        (1, 2): 3.0,
     })
     builder = PairwiseRouteMatrixBuilder(service)
     optimizer = BruteForceSequenceOptimizer(builder)
     
-    req = DeliverySequenceRequest("A", ("A", "B"))
+    req = DeliverySequenceRequest(1, (1, 2))
     res = optimizer.optimize(req)
     
     assert res.total_cost == 3.0
-    assert res.delivery_sequence.sequence == ("A", "B")
+    assert res.delivery_sequence.sequence == (1, 2)
 
 
 def test_optimize_unreachable():
     service = FakePairwiseRoutingService({
-        ("A", "B"): 1.0,
+        (1, 2): 1.0,
         # missing B->C, C->B
     })
     builder = PairwiseRouteMatrixBuilder(service)
     optimizer = BruteForceSequenceOptimizer(builder)
     
-    req = DeliverySequenceRequest("A", ("B", "C"))
+    req = DeliverySequenceRequest(1, (2, 3))
     
     with pytest.raises(RouteNotFoundError):
         optimizer.optimize(req)

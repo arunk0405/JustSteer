@@ -47,36 +47,36 @@ def executor(fake_service):
 
 def test_basic_multi_stop_execution(executor, fake_service):
     # Test 1, Test 2 - Basic Execution & Correct Ordering
-    seq = DeliverySequence(sequence=("B", "C", "D"))
-    result = executor.execute("A", seq)
+    seq = DeliverySequence(sequence=(2, 3, 4))
+    result = executor.execute(1, seq)
     
     assert result.success is True
     assert len(fake_service.calls) == 3
-    assert fake_service.calls == [("A", "B"), ("B", "C"), ("C", "D")]
+    assert fake_service.calls == [(1, 2), (2, 3), (3, 4)]
     
     assert len(result.routes) == 3
-    assert result.routes[0].source_node == "A"
-    assert result.routes[0].destination_node == "B"
-    assert result.routes[1].source_node == "B"
-    assert result.routes[1].destination_node == "C"
-    assert result.routes[2].source_node == "C"
-    assert result.routes[2].destination_node == "D"
+    assert result.routes[0].source_node == 1
+    assert result.routes[0].destination_node == 2
+    assert result.routes[1].source_node == 2
+    assert result.routes[1].destination_node == 3
+    assert result.routes[2].source_node == 3
+    assert result.routes[2].destination_node == 4
 
 
 def test_aggregate_cost(executor, fake_service):
     # Test 3 - Aggregate Cost
-    r1 = RouteResult(success=True, source_node="A", destination_node="B", total_cost=0.2)
-    r2 = RouteResult(success=True, source_node="B", destination_node="C", total_cost=0.4)
-    r3 = RouteResult(success=True, source_node="C", destination_node="D", total_cost=0.3)
+    r1 = RouteResult(success=True, source_node=1, destination_node=2, total_cost=0.2)
+    r2 = RouteResult(success=True, source_node=2, destination_node=3, total_cost=0.4)
+    r3 = RouteResult(success=True, source_node=3, destination_node=4, total_cost=0.3)
     
     fake_service.mock_routes = {
-        ("A", "B"): r1,
-        ("B", "C"): r2,
-        ("C", "D"): r3
+        (1, 2): r1,
+        (2, 3): r2,
+        (3, 4): r3
     }
     
-    seq = DeliverySequence(sequence=("B", "C", "D"))
-    result = executor.execute("A", seq)
+    seq = DeliverySequence(sequence=(2, 3, 4))
+    result = executor.execute(1, seq)
     
     # 0.2 + 0.4 + 0.3 = 0.9
     assert pytest.approx(result.total_cost) == 0.9
@@ -84,18 +84,18 @@ def test_aggregate_cost(executor, fake_service):
 
 def test_aggregate_distance(executor, fake_service):
     # Test 4 - Aggregate Distance
-    r1 = RouteResult(success=True, source_node="A", destination_node="B", distance_m=100)
-    r2 = RouteResult(success=True, source_node="B", destination_node="C", distance_m=200)
-    r3 = RouteResult(success=True, source_node="C", destination_node="D", distance_m=150)
+    r1 = RouteResult(success=True, source_node=1, destination_node=2, distance_m=100)
+    r2 = RouteResult(success=True, source_node=2, destination_node=3, distance_m=200)
+    r3 = RouteResult(success=True, source_node=3, destination_node=4, distance_m=150)
     
     fake_service.mock_routes = {
-        ("A", "B"): r1,
-        ("B", "C"): r2,
-        ("C", "D"): r3
+        (1, 2): r1,
+        (2, 3): r2,
+        (3, 4): r3
     }
     
-    seq = DeliverySequence(sequence=("B", "C", "D"))
-    result = executor.execute("A", seq)
+    seq = DeliverySequence(sequence=(2, 3, 4))
+    result = executor.execute(1, seq)
     
     # 100 + 200 + 150 = 450
     assert pytest.approx(result.total_distance_m) == 450
@@ -104,7 +104,7 @@ def test_aggregate_distance(executor, fake_service):
 def test_empty_sequence(executor, fake_service):
     # Test 5 - Empty Sequence
     seq = DeliverySequence(sequence=())
-    result = executor.execute("A", seq)
+    result = executor.execute(1, seq)
     
     assert len(fake_service.calls) == 0
     assert result.success is True
@@ -115,52 +115,52 @@ def test_empty_sequence(executor, fake_service):
 
 def test_single_delivery(executor, fake_service):
     # Test 6 - Single Delivery
-    seq = DeliverySequence(sequence=("B",))
-    result = executor.execute("A", seq)
+    seq = DeliverySequence(sequence=(2,))
+    result = executor.execute(1, seq)
     
     assert len(fake_service.calls) == 1
-    assert fake_service.calls[0] == ("A", "B")
+    assert fake_service.calls[0] == (1, 2)
     assert len(result.routes) == 1
 
 
 def test_delivery_at_current_location(executor, fake_service):
     # Test 7 - Delivery at Current Location
-    seq = DeliverySequence(sequence=("A", "B"))
-    result = executor.execute("A", seq)
+    seq = DeliverySequence(sequence=(1, 2))
+    result = executor.execute(1, seq)
     
     assert len(fake_service.calls) == 2
-    assert fake_service.calls[0] == ("A", "A")
-    assert fake_service.calls[1] == ("A", "B")
+    assert fake_service.calls[0] == (1, 1)
+    assert fake_service.calls[1] == (1, 2)
 
 
 def test_routing_failure(executor, fake_service):
     # Test 8, Test 9 - Routing Failure & No Silent Skipping
-    fake_service.unreachable_pairs.add(("B", "C"))
+    fake_service.unreachable_pairs.add((2, 3))
     
-    seq = DeliverySequence(sequence=("B", "C", "D"))
+    seq = DeliverySequence(sequence=(2, 3, 4))
     
-    with pytest.raises(RouteNotFoundError, match="No route B -> C"):
-        executor.execute("A", seq)
+    with pytest.raises(RouteNotFoundError, match="No route 2 -> 3"):
+        executor.execute(1, seq)
 
 
 def test_sequence_immutability(executor, fake_service):
     # Test 10 - Sequence Immutability
-    tup = ("B", "C")
+    tup = (2, 3)
     seq = DeliverySequence(sequence=tup)
     
-    executor.execute("A", seq)
+    executor.execute(1, seq)
     
     assert seq.sequence is tup
-    assert seq.sequence == ("B", "C")
+    assert seq.sequence == (2, 3)
 
 
 def test_routeresult_preservation(executor, fake_service):
     # Test 11 - RouteResult Preservation
-    r1 = RouteResult(success=True, source_node="A", destination_node="B")
-    fake_service.mock_routes = {("A", "B"): r1}
+    r1 = RouteResult(success=True, source_node=1, destination_node=2)
+    fake_service.mock_routes = {(1, 2): r1}
     
-    seq = DeliverySequence(sequence=("B",))
-    result = executor.execute("A", seq)
+    seq = DeliverySequence(sequence=(2,))
+    result = executor.execute(1, seq)
     
     assert result.routes[0] is r1
 
@@ -175,35 +175,35 @@ def test_synthetic_end_to_end_routing():
     # 34. Integration Test
     # Create a synthetic graph A -> B -> C -> D
     G = nx.MultiDiGraph()
-    G.add_node("A", x=0.0, y=0.0)
-    G.add_node("B", x=0.0, y=1.0)
-    G.add_node("C", x=0.0, y=2.0)
-    G.add_node("D", x=0.0, y=3.0)
+    G.add_node(1, x=0.0, y=0.0)
+    G.add_node(2, x=0.0, y=1.0)
+    G.add_node(3, x=0.0, y=2.0)
+    G.add_node(4, x=0.0, y=3.0)
     
-    G.add_edge("A", "B", final_cost=0.2, length=100.0)
-    G.add_edge("B", "C", final_cost=0.3, length=200.0)
-    G.add_edge("C", "D", final_cost=0.4, length=150.0)
+    G.add_edge(1, 2, final_cost=0.2, length=100.0)
+    G.add_edge(2, 3, final_cost=0.3, length=200.0)
+    G.add_edge(3, 4, final_cost=0.4, length=150.0)
     
     astar = AStarRoutingEngine(graph=G, cost_attribute="final_cost")
     service = PairwiseRoutingService(astar_engine=astar)
     executor = MultiStopRouteExecutor(pairwise_service=service)
     
-    seq = DeliverySequence(sequence=("B", "C", "D"))
-    result = executor.execute("A", seq)
+    seq = DeliverySequence(sequence=(2, 3, 4))
+    result = executor.execute(1, seq)
     
     assert result.success is True
     assert len(result.routes) == 3
     
-    assert result.routes[0].source_node == "A"
-    assert result.routes[0].destination_node == "B"
+    assert result.routes[0].source_node == 1
+    assert result.routes[0].destination_node == 2
     assert pytest.approx(result.routes[0].total_cost) == 0.2
     
-    assert result.routes[1].source_node == "B"
-    assert result.routes[1].destination_node == "C"
+    assert result.routes[1].source_node == 2
+    assert result.routes[1].destination_node == 3
     assert pytest.approx(result.routes[1].total_cost) == 0.3
     
-    assert result.routes[2].source_node == "C"
-    assert result.routes[2].destination_node == "D"
+    assert result.routes[2].source_node == 3
+    assert result.routes[2].destination_node == 4
     assert pytest.approx(result.routes[2].total_cost) == 0.4
     
     assert pytest.approx(result.total_cost) == 0.9

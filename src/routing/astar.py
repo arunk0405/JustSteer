@@ -13,23 +13,26 @@ from src.routing.exceptions import (
 from src.routing.route_result import RouteResult
 from src.routing.heuristic import get_heuristic
 from src.routing.path_reconstruction import reconstruct_path, extract_geometry_and_distance
-
+from src.routing.edge_cost import EdgeId
+from src.routing.cost_provider import EdgeCostProvider, StaticGraphCostProvider
 class AStarRoutingEngine:
     def __init__(
         self, 
         graph: nx.MultiDiGraph, 
         cost_attribute: str = "final_cost", 
         heuristic_mode: str = "zero",
-        max_expansions: int = 1000000
+        max_expansions: int = 1000000,
+        cost_provider: Optional[EdgeCostProvider] = None
     ):
         """
         Initializes the A* routing engine.
         
         Args:
             graph: The OSM road network (must be a NetworkX MultiDiGraph).
-            cost_attribute: The edge attribute containing the final ML composite cost.
+            cost_attribute: The edge attribute containing the final ML composite cost (legacy fallback).
             heuristic_mode: The heuristic to use (default: 'zero', which acts as Dijkstra).
             max_expansions: Safeguard against infinite loops / extremely large searches.
+            cost_provider: Request-scoped provider for dynamic costs. If None, uses static graph attribute.
         """
         if graph is None:
             raise GraphUnavailableError("Cannot initialize AStarRoutingEngine with None graph.")
@@ -39,6 +42,7 @@ class AStarRoutingEngine:
         self.heuristic_mode = heuristic_mode
         self.max_expansions = max_expansions
         self.heuristic_fn = get_heuristic(heuristic_mode)
+        self.cost_provider = cost_provider or StaticGraphCostProvider(graph, cost_attribute)
 
     def route(self, source: Any, destination: Any) -> RouteResult:
         """
@@ -123,20 +127,10 @@ class AStarRoutingEngine:
                 
                 # self.graph[current][neighbor] is a dict mapping edge_key -> edge_data
                 for key, edge_data in self.graph[current][neighbor].items():
-                    raw_cost = edge_data.get(self.cost_attribute)
+                    edge_id = EdgeId(source=current, target=neighbor, key=key)
+                    cost = self.cost_provider.get_cost(edge_id)
                     
-                    if raw_cost is None:
-                        continue
-                        
-                    try:
-                        cost = float(raw_cost)
-                    except (ValueError, TypeError):
-                        continue
-                        
-                    if math.isnan(cost) or math.isinf(cost):
-                        continue
-                        
-                    if cost < 0:
+                    if cost is None:
                         continue
                         
                     if cost < best_edge_cost:
