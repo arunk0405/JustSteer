@@ -98,4 +98,26 @@ class DynamicRoutingApp:
         # 6. Final Orchestration
         router = MultiStopRouter(sequence_optimizer=optimizer, route_executor=executor)
         
-        return router.route(start_node, delivery_nodes)
+        raw_result = router.route(start_node, delivery_nodes)
+        
+        # 7. Post-routing duration calculation using isolated store
+        total_duration_s = 0.0
+        for leg in raw_result.routes:
+            leg_duration_s = 0.0
+            for u, v, k in leg.path_edges:
+                from src.routing.edge_cost import EdgeId
+                edge_cost = store.get(EdgeId(source=u, target=v, key=k))
+                if edge_cost:
+                    # ML model outputs travel time in minutes
+                    leg_duration_s += edge_cost.cost_data.predicted_travel_time * 60.0
+            leg.duration_s = leg_duration_s
+            total_duration_s += leg_duration_s
+            
+        return MultiStopRouteResult(
+            success=raw_result.success,
+            delivery_sequence=raw_result.delivery_sequence,
+            routes=raw_result.routes,
+            total_cost=raw_result.total_cost,
+            total_distance_m=raw_result.total_distance_m,
+            total_duration_s=total_duration_s
+        )

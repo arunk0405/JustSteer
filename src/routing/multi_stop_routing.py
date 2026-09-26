@@ -28,6 +28,7 @@ class MultiStopRouteResult:
     routes: Tuple[RouteResult, ...]
     total_cost: float
     total_distance_m: float
+    total_duration_s: float = 0.0
 
 
 class MultiStopRouteExecutor:

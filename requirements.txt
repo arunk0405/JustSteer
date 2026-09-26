@@ -13,3 +13,9 @@ cachetools>=5.3
 python-dotenv>=1.0.0
 networkx>=3.0
 osmnx>=1.9.0
+
+# Phase 3 — API (Step 9.8)
+fastapi>=0.100.0
+uvicorn>=0.23.0
+pydantic>=2.0.0
+httpx>=0.25.0
