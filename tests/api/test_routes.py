@@ -33,7 +33,20 @@ class MockDynamicRoutingApp:
             routes=(leg,),
             total_cost=10.5,
             total_distance_m=100.0,
-            total_duration_s=120.0
+            total_duration_s=120.0,
+            evaluated_permutations=2,
+            expanded_nodes=42,
+            explainability_metrics={
+                "candidate_edges_evaluated": 150,
+                "average_predicted_travel_time_s": 45.0,
+                "average_safety_risk": 0.25,
+                "average_travel_time_weight": 0.7,
+                "average_safety_weight": 0.3,
+                "models": {
+                    "traffic": "XGBoost",
+                    "safety": "XGBoost"
+                }
+            }
         )
 
 class MockContextAggregator:

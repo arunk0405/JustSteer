@@ -66,4 +66,13 @@ class MultiStopRouter:
         )
         
         # 4. Return Final Integrated Result (Step 8.4)
-        return execution_result
+        return MultiStopRouteResult(
+            success=execution_result.success,
+            delivery_sequence=execution_result.delivery_sequence,
+            routes=execution_result.routes,
+            total_cost=execution_result.total_cost,
+            total_distance_m=execution_result.total_distance_m,
+            total_duration_s=execution_result.total_duration_s,
+            expanded_nodes=execution_result.expanded_nodes,
+            evaluated_permutations=optimization_result.evaluated_permutations
+        )

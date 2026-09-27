@@ -54,3 +54,4 @@ class DeliverySequenceResult:
     delivery_sequence: DeliverySequence
     total_cost: float
     routes: Tuple[RouteResult, ...]
+    evaluated_permutations: int = 0

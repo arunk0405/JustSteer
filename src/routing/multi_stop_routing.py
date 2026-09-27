@@ -29,6 +29,9 @@ class MultiStopRouteResult:
     total_cost: float
     total_distance_m: float
     total_duration_s: float = 0.0
+    evaluated_permutations: int = 0
+    expanded_nodes: int = 0
+    explainability_metrics: dict = None
 
 
 class MultiStopRouteExecutor:
@@ -80,10 +83,13 @@ class MultiStopRouteExecutor:
                 
             current_node = next_node
             
+        expanded_nodes = sum(r.expanded_nodes for r in routes)
+            
         return MultiStopRouteResult(
             success=True,
             delivery_sequence=sequence,
             routes=tuple(routes),
             total_cost=total_cost,
-            total_distance_m=total_distance_m
+            total_distance_m=total_distance_m,
+            expanded_nodes=expanded_nodes
         )

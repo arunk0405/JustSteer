@@ -134,18 +134,38 @@ def route_multi_stop(
             )
             current_coord = leg_end_coord
             
-        from src.api.schemas import RouteSummary
+        from src.api.schemas import RouteSummary, ExplainabilityMetadata, TrafficInfo, SafetyInfo, WeightsInfo, ModelInfo
         summary = RouteSummary(
             total_distance_m=result.total_distance_m,
             estimated_duration_s=result.total_duration_s,
             stop_count=len(optimized_stops)
         )
             
+        explainability = None
+        if result.explainability_metrics:
+            metrics = result.explainability_metrics
+            explainability = ExplainabilityMetadata(
+                candidate_edges_evaluated=metrics["candidate_edges_evaluated"],
+                a_star_expanded_nodes=result.expanded_nodes,
+                evaluated_permutations=result.evaluated_permutations,
+                traffic=TrafficInfo(average_predicted_travel_time_s=metrics["average_predicted_travel_time_s"]),
+                safety=SafetyInfo(average_risk=metrics["average_safety_risk"]),
+                weights=WeightsInfo(
+                    travel_time=metrics["average_travel_time_weight"],
+                    safety=metrics["average_safety_weight"]
+                ),
+                models=ModelInfo(
+                    traffic=metrics["models"]["traffic"],
+                    safety=metrics["models"]["safety"]
+                )
+            )
+
         return MultiStopRouteResponse(
             success=result.success,
             summary=summary,
             optimized_stops=optimized_stops,
-            legs=serialized_routes
+            legs=serialized_routes,
+            explainability=explainability
         )
 
     except (CoordinateValidationError, NodeMappingError) as e:

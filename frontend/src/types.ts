@@ -17,11 +17,32 @@ export interface RouteLeg {
   geometry: any; // GeoJSON LineString
 }
 
+export interface ExplainabilityMetadata {
+  candidate_edges_evaluated: number;
+  a_star_expanded_nodes: number;
+  evaluated_permutations: number;
+  traffic: {
+    average_predicted_travel_time_s: number;
+  };
+  safety: {
+    average_risk: number;
+  };
+  weights: {
+    travel_time: number;
+    safety: number;
+  };
+  models: {
+    traffic: string;
+    safety: string;
+  };
+}
+
 export interface MultiStopRouteResponse {
   success: boolean;
   summary: RouteSummary;
   optimized_stops: Coordinate[];
   legs: RouteLeg[];
+  explainability?: ExplainabilityMetadata;
 }
 
 export interface MultiStopRouteRequest {

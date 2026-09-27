@@ -129,6 +129,35 @@ export default function App() {
             </ul>
           </div>
         )}
+
+        {routeResult && routeResult.explainability && (
+          <div style={{ padding: '15px', backgroundColor: '#e2e3e5', color: '#383d41', borderRadius: '4px', fontSize: '14px' }}>
+            <h3 style={{ marginTop: 0 }}>How the route was calculated</h3>
+            
+            <div style={{ marginBottom: '10px' }}>
+              <div>✓ Candidate roads: {routeResult.explainability.candidate_edges_evaluated.toLocaleString()}</div>
+              <div>✓ ML predictions generated</div>
+              <div>✓ A* nodes explored: {routeResult.explainability.a_star_expanded_nodes.toLocaleString()}</div>
+              <div>✓ Stop sequences evaluated: {routeResult.explainability.evaluated_permutations}</div>
+            </div>
+            
+            <div style={{ marginBottom: '10px' }}>
+              <strong>Traffic / Travel Time</strong><br/>
+              Avg. predicted time: {routeResult.explainability.traffic.average_predicted_travel_time_s.toFixed(1)} s
+            </div>
+            
+            <div style={{ marginBottom: '10px' }}>
+              <strong>Safety</strong><br/>
+              Avg. risk: {routeResult.explainability.safety.average_risk.toFixed(2)}
+            </div>
+            
+            <div>
+              <strong>Cost weighting</strong><br/>
+              Travel Time: {(routeResult.explainability.weights.travel_time * 100).toFixed(0)} %<br/>
+              Safety: {(routeResult.explainability.weights.safety * 100).toFixed(0)} %
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Map Area */}

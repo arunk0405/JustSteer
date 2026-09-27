@@ -23,8 +23,32 @@ class RouteSummary(BaseModel):
     estimated_duration_s: float
     stop_count: int
 
+class TrafficInfo(BaseModel):
+    average_predicted_travel_time_s: float
+
+class SafetyInfo(BaseModel):
+    average_risk: float
+
+class WeightsInfo(BaseModel):
+    travel_time: float
+    safety: float
+
+class ModelInfo(BaseModel):
+    traffic: str
+    safety: str
+
+class ExplainabilityMetadata(BaseModel):
+    candidate_edges_evaluated: int
+    a_star_expanded_nodes: int
+    evaluated_permutations: int
+    traffic: TrafficInfo
+    safety: SafetyInfo
+    weights: WeightsInfo
+    models: ModelInfo
+
 class MultiStopRouteResponse(BaseModel):
     success: bool
     summary: RouteSummary
     optimized_stops: List[Coordinate]
     legs: List[RouteLeg]
+    explainability: Optional[ExplainabilityMetadata] = None

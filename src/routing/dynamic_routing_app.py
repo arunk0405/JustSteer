@@ -81,7 +81,7 @@ class DynamicRoutingApp:
             edge_cost_store=store
         )
         # Generate costs EXACTLY ONCE for the request
-        cost_generator.generate(candidate_edges, context)
+        gen_result = cost_generator.generate(candidate_edges, context)
         
         # 4. Request-scoped Routing Dependencies
         provider = DynamicStoreCostProvider(store)
@@ -100,18 +100,41 @@ class DynamicRoutingApp:
         
         raw_result = router.route(start_node, delivery_nodes)
         
-        # 7. Post-routing duration calculation using isolated store
+        # 7. Post-routing duration & explainability calculation using isolated store
         total_duration_s = 0.0
+        total_safety_risk = 0.0
+        total_travel_time_s = 0.0
+        total_t_weight = 0.0
+        total_s_weight = 0.0
+        edge_count = 0
+        
         for leg in raw_result.routes:
             leg_duration_s = 0.0
             for u, v, k in leg.path_edges:
                 from src.routing.edge_cost import EdgeId
                 edge_cost = store.get(EdgeId(source=u, target=v, key=k))
                 if edge_cost:
-                    # ML model outputs travel time in minutes
-                    leg_duration_s += edge_cost.cost_data.predicted_travel_time * 60.0
+                    travel_time_s = edge_cost.cost_data.predicted_travel_time * 60.0
+                    leg_duration_s += travel_time_s
+                    total_travel_time_s += travel_time_s
+                    total_safety_risk += edge_cost.cost_data.raw_safety_risk
+                    total_t_weight += edge_cost.cost_data.travel_time_weight
+                    total_s_weight += edge_cost.cost_data.safety_weight
+                    edge_count += 1
             leg.duration_s = leg_duration_s
             total_duration_s += leg_duration_s
+            
+        explainability_metrics = {
+            "candidate_edges_evaluated": gen_result.processed_count,
+            "average_predicted_travel_time_s": (total_travel_time_s / edge_count) if edge_count else 0.0,
+            "average_safety_risk": (total_safety_risk / edge_count) if edge_count else 0.0,
+            "average_travel_time_weight": (total_t_weight / edge_count) if edge_count else 0.0,
+            "average_safety_weight": (total_s_weight / edge_count) if edge_count else 0.0,
+            "models": {
+                "traffic": "XGBoost",
+                "safety": "XGBoost"
+            }
+        }
             
         return MultiStopRouteResult(
             success=raw_result.success,
@@ -119,5 +142,8 @@ class DynamicRoutingApp:
             routes=raw_result.routes,
             total_cost=raw_result.total_cost,
             total_distance_m=raw_result.total_distance_m,
-            total_duration_s=total_duration_s
+            total_duration_s=total_duration_s,
+            evaluated_permutations=raw_result.evaluated_permutations,
+            expanded_nodes=raw_result.expanded_nodes,
+            explainability_metrics=explainability_metrics
         )

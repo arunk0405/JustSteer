@@ -61,6 +61,7 @@ class BruteForceSequenceOptimizer:
         best_cost = float('inf')
         best_sequence: Optional[Tuple[Any, ...]] = None
         best_routes: Optional[Tuple[Any, ...]] = None
+        evaluated_permutations = 0
         
         # 2. Evaluate all permutations of the deliveries
         for perm in itertools.permutations(deliveries_to_sequence):
@@ -98,6 +99,7 @@ class BruteForceSequenceOptimizer:
                     is_valid = False
                     break
                     
+            evaluated_permutations += 1
             if is_valid and current_cost < best_cost:
                 best_cost = current_cost
                 best_sequence = full_sequence
@@ -109,5 +111,6 @@ class BruteForceSequenceOptimizer:
         return DeliverySequenceResult(
             delivery_sequence=DeliverySequence(sequence=best_sequence),
             total_cost=best_cost,
-            routes=best_routes
+            routes=best_routes,
+            evaluated_permutations=evaluated_permutations
         )
