@@ -1,9 +1,4 @@
-html, body, #root {
-  margin: 0;
-  padding: 0;
-  height: 100%;
-  width: 100%;
-}
+@import './styles/tokens.css';
 
 button:disabled {
   opacity: 0.5;

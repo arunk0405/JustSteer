@@ -1,0 +1,48 @@
+.mapWrapper {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background-color: var(--color-surface-soft);
+}
+
+.mapContainer {
+  width: 100%;
+  height: 100%;
+  z-index: 1; /* Keep map below modals/overlays */
+}
+
+.mapInstruction {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: white;
+  padding: 10px 20px;
+  border-radius: var(--radius-full);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  z-index: 1000;
+  pointer-events: none;
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+}
+
+.customMarker {
+  background: none;
+  border: none;
+}
+
+.markerContent {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: bold;
+  font-size: 14px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.4);
+  border: 2px solid white;
+}

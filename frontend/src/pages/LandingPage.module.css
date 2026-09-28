@@ -1,0 +1,321 @@
+.container {
+  padding-bottom: 0;
+}
+
+/* HERO SECTION */
+.hero {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-12);
+  padding: var(--spacing-12) 0;
+  align-items: center;
+}
+
+@media (min-width: 1024px) {
+  .hero {
+    flex-direction: row;
+    padding: var(--spacing-16) 0 var(--spacing-20);
+    justify-content: space-between;
+  }
+}
+
+.heroContent {
+  flex: 1;
+  max-width: 560px;
+}
+
+.heroVisual {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.eyebrow {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: var(--spacing-4);
+}
+
+.headline {
+  font-size: var(--font-size-4xl);
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  margin-bottom: var(--spacing-6);
+  color: var(--color-text-primary);
+}
+
+@media (min-width: 768px) {
+  .headline {
+    font-size: var(--font-size-5xl);
+  }
+}
+
+.subtitle {
+  font-size: var(--font-size-lg);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--spacing-8);
+  max-width: 480px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-4);
+}
+
+
+/* VALUE PROPOSITION STRIP */
+.featuresStrip {
+  display: grid;
+  grid-template-columns: repeat(1, 1fr);
+  gap: var(--spacing-8);
+  padding: var(--spacing-12) 0;
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+}
+
+@media (min-width: 640px) {
+  .featuresStrip {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .featuresStrip {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.featureItem {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3);
+  padding: var(--spacing-4);
+  border-radius: var(--radius-md);
+  transition: background-color var(--transition-fast);
+}
+
+.featureItem:hover {
+  background-color: var(--color-surface-soft);
+}
+
+.featureIcon {
+  font-size: var(--font-size-3xl);
+}
+
+.featureTitle {
+  font-size: var(--font-size-base);
+  margin: 0;
+}
+
+.featureDesc {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+
+/* WHY JUSTSTEER */
+.whySection {
+  padding: var(--spacing-16) 0;
+}
+
+.whyHeader {
+  max-width: 700px;
+  margin-bottom: var(--spacing-12);
+}
+
+.sectionTitle {
+  font-size: var(--font-size-3xl);
+  letter-spacing: -0.02em;
+  margin-bottom: var(--spacing-4);
+}
+
+.sectionSubtitle {
+  font-size: var(--font-size-lg);
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.comparisonGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--spacing-6);
+}
+
+@media (min-width: 768px) {
+  .comparisonGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.comparisonCard {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-8);
+  box-shadow: var(--shadow-sm);
+}
+
+.comparisonHighlighted {
+  border-color: var(--color-primary);
+  background-color: var(--color-primary-soft);
+}
+
+.comparisonTitle {
+  font-size: var(--font-size-xl);
+  margin-bottom: var(--spacing-6);
+}
+
+.comparisonList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-4);
+}
+
+.comparisonList li {
+  position: relative;
+  padding-left: var(--spacing-6);
+  color: var(--color-text-secondary);
+}
+
+.comparisonHighlighted .comparisonList li {
+  color: var(--color-text-primary);
+  font-weight: var(--font-weight-medium);
+}
+
+.comparisonList li::before {
+  content: "—";
+  position: absolute;
+  left: 0;
+  color: var(--color-text-muted);
+}
+
+.comparisonHighlighted .comparisonList li::before {
+  content: "✓";
+  color: var(--color-primary);
+}
+
+
+/* HOW IT WORKS PREVIEW */
+.howItWorksPreview {
+  padding: var(--spacing-16) 0;
+  background-color: var(--color-surface);
+  border-radius: var(--radius-xl);
+  margin: var(--spacing-8) 0;
+  padding: var(--spacing-12);
+  border: 1px solid var(--color-border);
+}
+
+.howItWorksHeader {
+  text-align: center;
+  margin-bottom: var(--spacing-12);
+}
+
+.stepsGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--spacing-8);
+  margin-bottom: var(--spacing-12);
+}
+
+@media (min-width: 640px) {
+  .stepsGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (min-width: 1024px) {
+  .stepsGrid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.stepItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--spacing-4);
+}
+
+.stepNumber {
+  font-size: var(--font-size-3xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--color-primary-soft);
+  text-shadow: 1px 1px 0px var(--color-primary);
+}
+
+.stepTitle {
+  font-size: var(--font-size-lg);
+  margin: 0;
+}
+
+.howItWorksAction {
+  text-align: center;
+}
+
+
+/* ML / ROUTING VISUAL */
+.pipelineVisual {
+  padding: var(--spacing-16) 0;
+  display: flex;
+  justify-content: center;
+}
+
+.pipelineItems {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-3);
+  font-family: monospace;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  background-color: var(--color-surface-soft);
+  padding: var(--spacing-8) var(--spacing-16);
+  border-radius: var(--radius-lg);
+  border: 1px dashed var(--color-border);
+}
+
+.pipelineNode {
+  background-color: var(--color-surface);
+  padding: var(--spacing-2) var(--spacing-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+}
+
+.pipelineArrow {
+  color: var(--color-text-muted);
+}
+
+
+/* FINAL CTA */
+.finalCta {
+  text-align: center;
+  padding: var(--spacing-20) 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-6);
+}
+
+.ctaTitle {
+  font-size: var(--font-size-4xl);
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.ctaSubtitle {
+  font-size: var(--font-size-lg);
+  color: var(--color-text-secondary);
+  max-width: 500px;
+  margin: 0;
+}
