@@ -27,6 +27,7 @@ export const PlanRoutePage: React.FC = () => {
     removeDelivery,
     handleTimestampChange,
     resetRoute,
+    loadDemoScenario,
     
     handleMapClick,
     handleOriginDrag,
@@ -58,6 +59,15 @@ export const PlanRoutePage: React.FC = () => {
       <div className={styles.header}>
         <h2 className={styles.title}>Plan Your Route</h2>
         <p className={styles.subtitle}>Enter your starting location and delivery stops.</p>
+        <Button 
+          variant="secondary" 
+          size="sm" 
+          onClick={loadDemoScenario}
+          className={styles.addStopButton}
+          style={{ marginTop: '8px' }}
+        >
+          Load Standard Demo
+        </Button>
       </div>
       
       <div className={styles.formContent}>
@@ -237,6 +247,60 @@ export const PlanRoutePage: React.FC = () => {
                 ))}
               </ul>
             </div>
+            
+            {/* EXPLAINABILITY PANEL */}
+            {routeResult.explainability && (
+              <div className={styles.explainabilityPanel}>
+                <details className={styles.explainabilityDetails}>
+                  <summary className={styles.explainabilitySummary}>
+                    How the route was calculated
+                  </summary>
+                  <div className={styles.explainabilityContent}>
+                    <p className={styles.explainabilityIntro}>
+                      The route was selected by combining predicted travel time
+                      and safety risk for candidate road segments.
+                      A* then searched the graph using those dynamic costs,
+                      while the multi-stop optimizer evaluated possible delivery
+                      orders to determine the final sequence.
+                    </p>
+                    
+                    <div className={styles.explainabilityGrid}>
+                      <div className={styles.explainabilityStat}>
+                        <span>Stops evaluated</span>
+                        <strong>{routeResult.explainability.evaluated_permutations} permutations</strong>
+                      </div>
+                      <div className={styles.explainabilityStat}>
+                        <span>A* nodes explored</span>
+                        <strong>{routeResult.explainability.a_star_expanded_nodes}</strong>
+                      </div>
+                      <div className={styles.explainabilityStat}>
+                        <span>Candidate edges evaluated</span>
+                        <strong>{routeResult.explainability.candidate_edges_evaluated}</strong>
+                      </div>
+                      <div className={styles.explainabilityStat}>
+                        <span>Estimated travel time</span>
+                        <strong>{Math.round(routeResult.explainability.traffic.average_predicted_travel_time_s / 60)} mins avg</strong>
+                      </div>
+                      <div className={styles.explainabilityStat}>
+                        <span>Safety risk</span>
+                        <strong>{routeResult.explainability.safety.average_risk.toFixed(2)}</strong>
+                      </div>
+                      <div className={styles.explainabilityStat}>
+                        <span>Dynamic Weights</span>
+                        <strong>{Math.round(routeResult.explainability.weights.travel_time * 100)}% Traffic / {Math.round(routeResult.explainability.weights.safety * 100)}% Safety</strong>
+                      </div>
+                      <div className={styles.explainabilityStat}>
+                        <span>Models</span>
+                        <strong style={{ fontSize: '10px' }}>
+                          {routeResult.explainability.models.traffic} <br />
+                          {routeResult.explainability.models.safety}
+                        </strong>
+                      </div>
+                    </div>
+                  </div>
+                </details>
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -16,13 +16,13 @@ def run_smoke_test():
     # Delivery: Near Guindy
     payload = {
         "origin": {
-            "latitude": 13.0807843,
-            "longitude": 80.2651669
+            "latitude": 13.0287956,
+            "longitude": 80.1947018
         },
         "deliveries": [
             {
-                "latitude": 13.0806923,
-                "longitude": 80.2652332
+                "latitude": 13.0307214,
+                "longitude": 80.1927627
             }
         ]
     }

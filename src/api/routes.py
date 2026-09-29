@@ -46,8 +46,13 @@ def _delivery_context_to_routing_context(delivery_ctx, requested_timestamp) -> R
     if delivery_ctx.traffic:
         congestion_index = delivery_ctx.traffic.congestion_index
         
-    # Build safety history - not currently resolved from delivery ctx, placeholder
-    safety_history = None
+    # Build safety history - F7 Demo Readiness Mock
+    safety_history = SafetyHistory(
+        accidents_total_historical=5,
+        fatal_accidents_historical=0,
+        injuries_historical=2,
+        historical_risk_score=45.0
+    )
 
     return RoutingContext(
         timestamp=requested_timestamp,

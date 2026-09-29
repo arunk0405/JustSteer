@@ -83,6 +83,16 @@ export function useRoutePlanning() {
     setRouteError(null);
   };
 
+  const loadDemoScenario = () => {
+    resetRoute();
+    setOrigin({ latitude: '13.0287956', longitude: '80.1947018' });
+    setDeliveries([
+      { id: generateId(), coordinate: { latitude: '13.0307214', longitude: '80.1927627' } },
+      { id: generateId(), coordinate: { latitude: '13.0328471', longitude: '80.1985423' } },
+      { id: generateId(), coordinate: { latitude: '13.0360019', longitude: '80.2044486' } }
+    ]);
+  };
+
   // Map Interactions
   const handleMapClick = (coord: Coordinate) => {
     const latStr = coord.latitude.toFixed(6);
@@ -228,6 +238,7 @@ export function useRoutePlanning() {
     removeDelivery,
     handleTimestampChange,
     resetRoute,
+    loadDemoScenario,
     
     handleMapClick,
     handleOriginDrag,
