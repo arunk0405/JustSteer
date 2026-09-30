@@ -1,0 +1,29 @@
+{
+    "model_version": "v1.0",
+    "model_type": "XGBClassifier",
+    "data_origin": "synthetic",
+    "training_source": "data/raw/synthetic_road_safety.csv",
+    "target": "risk_class_enc",
+    "feature_count": 10,
+    "feature_order": [
+        "accidents_total_historical",
+        "fatal_accidents_historical",
+        "injuries_historical",
+        "historical_risk_score",
+        "road_type_enc",
+        "lanes",
+        "speed_limit",
+        "lighting_enc",
+        "surface_enc",
+        "traffic_exposure_enc"
+    ],
+    "training_row_count": 1000,
+    "training_timestamp_utc": "2026-09-30T03:21:39.125716",
+    "metrics": {
+        "macro_f1": 0.41311196055983473
+    },
+    "artifact": {
+        "path": "models/safety/safety_risk_xgb.pkl",
+        "sha256": "54f7ee42f4341573fd9d16088e116fa70fd20d79892ba8989ecd12637d217988"
+    }
+}

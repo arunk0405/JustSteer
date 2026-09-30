@@ -1,0 +1,187 @@
+{
+    "run_id": "6bff61c9907b42cd9a351c8dec94568c",
+    "model_name": "velocity_predictor",
+    "model_version": "velocity-ridge-v2",
+    "training_timestamp": "2026-09-30T03:20:57.331971",
+    "algorithm": "Ridge",
+    "scaler": "StandardScaler",
+    "target": "traffic_speed_kmh",
+    "dataset_sources": [
+        "train.csv",
+        "daily_features.db"
+    ],
+    "dataset_hashes": {
+        "train.csv": {
+            "size_bytes": 200410,
+            "sha256": "3e77301574dbf27151a28023766406416e401bc8ffb537504882c291b50ba711"
+        },
+        "daily_features.db": {
+            "size_bytes": 98304,
+            "sha256": "fa84fa770912b530a32ba85208600bba8fb889d6d118985a9f113d0c4c4162bc"
+        }
+    },
+    "raw_row_count": 842,
+    "training_row_count": 1347,
+    "enriched_row_count": 1684,
+    "feature_count": 19,
+    "feature_order": [
+        "rain_1h_mm",
+        "temperature_c",
+        "humidity_pct",
+        "wind_speed_kmh",
+        "visibility_m",
+        "rain_risk_score",
+        "rain_forecast_hours",
+        "is_raining",
+        "is_foggy",
+        "is_high_wind",
+        "is_ne_monsoon",
+        "congestion_index",
+        "freeflow_speed_kmph",
+        "hour_of_day",
+        "day_of_week",
+        "is_weekend",
+        "month",
+        "zone_type_enc",
+        "road_type_enc"
+    ],
+    "feature_schema": [
+        {
+            "index": 1,
+            "name": "rain_1h_mm",
+            "source": "training/context",
+            "osm_derived": false
+        },
+        {
+            "index": 2,
+            "name": "temperature_c",
+            "source": "training/context",
+            "osm_derived": false
+        },
+        {
+            "index": 3,
+            "name": "humidity_pct",
+            "source": "training/context",
+            "osm_derived": false
+        },
+        {
+            "index": 4,
+            "name": "wind_speed_kmh",
+            "source": "training/context",
+            "osm_derived": false
+        },
+        {
+            "index": 5,
+            "name": "visibility_m",
+            "source": "training/context",
+            "osm_derived": false
+        },
+        {
+            "index": 6,
+            "name": "rain_risk_score",
+            "source": "training/context",
+            "osm_derived": false
+        },
+        {
+            "index": 7,
+            "name": "rain_forecast_hours",
+            "source": "training/context",
+            "osm_derived": false
+        },
+        {
+            "index": 8,
+            "name": "is_raining",
+            "source": "training/context",
+            "osm_derived": false
+        },
+        {
+            "index": 9,
+            "name": "is_foggy",
+            "source": "training/context",
+            "osm_derived": false
+        },
+        {
+            "index": 10,
+            "name": "is_high_wind",
+            "source": "training/context",
+            "osm_derived": false
+        },
+        {
+            "index": 11,
+            "name": "is_ne_monsoon",
+            "source": "training/context",
+            "osm_derived": false
+        },
+        {
+            "index": 12,
+            "name": "congestion_index",
+            "source": "training/context",
+            "osm_derived": false
+        },
+        {
+            "index": 13,
+            "name": "freeflow_speed_kmph",
+            "source": "OSM",
+            "osm_derived": true
+        },
+        {
+            "index": 14,
+            "name": "hour_of_day",
+            "source": "training/context",
+            "osm_derived": false
+        },
+        {
+            "index": 15,
+            "name": "day_of_week",
+            "source": "training/context",
+            "osm_derived": false
+        },
+        {
+            "index": 16,
+            "name": "is_weekend",
+            "source": "training/context",
+            "osm_derived": false
+        },
+        {
+            "index": 17,
+            "name": "month",
+            "source": "training/context",
+            "osm_derived": false
+        },
+        {
+            "index": 18,
+            "name": "zone_type_enc",
+            "source": "training/context",
+            "osm_derived": false
+        },
+        {
+            "index": 19,
+            "name": "road_type_enc",
+            "source": "OSM",
+            "osm_derived": true
+        }
+    ],
+    "transformations": [
+        "engineer_features",
+        "synthesise_risk_labels",
+        "enrich_training_data_with_osm_variance"
+    ],
+    "osm_enrichment": {
+        "enabled": true,
+        "attributes": [
+            "road_type_enc",
+            "freeflow_speed_kmph"
+        ]
+    },
+    "evaluation_metrics": {
+        "velocity_mae_kmh": 3.7354,
+        "velocity_rmse_kmh": 4.6653,
+        "velocity_r2": 0.9179,
+        "velocity_mape_pct": 10.3541,
+        "velocity_max_err_kmh": 15.2889
+    },
+    "artifact": {
+        "path": "models/velocity_predictor.pkl",
+        "sha256": "b122779ab987af3dbf8fcc1a82be94c62f23e2c3b2b3d3c76aa7453f8a36665b"
+    }
+}

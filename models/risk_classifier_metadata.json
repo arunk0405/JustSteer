@@ -1,0 +1,13 @@
+{
+    "run_id": "6bff61c9907b42cd9a351c8dec94568c",
+    "model_version": "risk-xgboost-v2",
+    "data_origin": "synthetic",
+    "training_rows": 1347,
+    "target": "risk_label_enc",
+    "feature_count": 19,
+    "artifact": {
+        "path": "models/risk_classifier.pkl",
+        "sha256": "f51d6bfdc3de44a1135e00084137d81114a942309ec1fd032665732f124d01be"
+    },
+    "training_timestamp": "2026-09-30T03:20:57.346525"
+}

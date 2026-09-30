@@ -14,6 +14,14 @@ from sklearn.preprocessing import LabelEncoder
 import joblib
 from sklearn.metrics import f1_score
 import xgboost as xgb
+import hashlib
+import json
+from datetime import datetime
+import mlflow
+import mlflow.sklearn
+
+MLFLOW_TRACKING_URI = os.getenv("MLFLOW_TRACKING_URI", "mlruns")
+MLFLOW_EXPERIMENT = "juststeer-safety-training"
 
 def load_data(filepath="data/raw/synthetic_road_safety.csv"):
     if not os.path.exists(filepath):
@@ -177,11 +185,88 @@ def train_safety_model(df, model_out_dir="models/safety"):
     print("\n")
     
     # Save the model
+    # Save the model safely via temp file
     os.makedirs(model_out_dir, exist_ok=True)
     model_path = os.path.join(model_out_dir, model_name)
-    joblib.dump(best_clf, model_path)
+    temp_path = os.path.join(model_out_dir, f"{model_name}.tmp")
+    
+    joblib.dump(best_clf, temp_path)
+    os.replace(temp_path, model_path)
     print(f"[*] Saved best safety risk model to {model_path}")
     
+    # Calculate SHA256 hash
+    sha256_hash = hashlib.sha256()
+    with open(model_path, "rb") as f:
+        for byte_block in iter(lambda: f.read(4096), b""):
+            sha256_hash.update(byte_block)
+    model_hash = sha256_hash.hexdigest()
+    
+    # Generate Provenance Metadata
+    metadata = {
+        "model_version": "v1.0",
+        "model_type": "XGBClassifier" if "xgb" in model_name else "RandomForestClassifier",
+        "data_origin": "synthetic",
+        "training_source": "data/raw/synthetic_road_safety.csv",
+        "target": "risk_class_enc",
+        "feature_count": len(features),
+        "feature_order": features,
+        "training_row_count": len(train_df),
+        "training_timestamp_utc": datetime.utcnow().isoformat(),
+        "metrics": {
+            "macro_f1": float(xgb_f1) if "xgb" in model_name else float(rf_f1)
+        },
+        "artifact": {
+            "path": f"models/safety/{model_name}",
+            "sha256": model_hash
+        }
+    }
+    
+    metadata_name = model_name.replace(".pkl", "_metadata.json")
+    metadata_path = os.path.join(model_out_dir, metadata_name)
+    with open(metadata_path, "w") as f:
+        json.dump(metadata, f, indent=4)
+        
+    print(f"[*] Saved safety provenance metadata to {metadata_path}")
+    
+    # ── MLflow Tracking ──────────────────────────────────────────────
+    try:
+        mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+        mlflow.set_experiment(MLFLOW_EXPERIMENT)
+        
+        run_tags = {
+            "pipeline": "safety",
+            "model_family": "road_safety"
+        }
+        
+        with mlflow.start_run(tags=run_tags):
+            mlflow.log_params({
+                "model_candidates": "RandomForest,XGBoost",
+                "selected_model": "XGBoost" if "xgb" in model_name else "RandomForestClassifier",
+                "n_estimators": 100,
+                "max_depth": 6,
+                "random_state": 42,
+                "training_rows": len(train_df),
+                "test_rows": len(test_df),
+                "feature_count": len(features),
+                "feature_order": ",".join(features),
+                "training_source": "data/raw/synthetic_road_safety.csv",
+                "data_origin": "synthetic"
+            })
+            
+            mlflow.log_metrics({
+                "rf_macro_f1": float(rf_f1),
+                "xgb_macro_f1": float(xgb_f1),
+                "selected_macro_f1": float(xgb_f1) if "xgb" in model_name else float(rf_f1)
+            })
+            
+            mlflow.log_artifact(model_path, artifact_path="model")
+            mlflow.log_artifact(metadata_path, artifact_path="metadata")
+            mlflow.log_artifact("data/raw/synthetic_road_safety.csv", artifact_path="data")
+            mlflow.sklearn.log_model(best_clf, "safety_risk_model_mlflow")
+            print("[*] MLflow logging completed successfully.")
+    except Exception as e:
+        print(f"[!] Warning: MLflow logging failed: {e}")
+        
     return best_clf, test_df_results
 
 if __name__ == "__main__":

@@ -48,8 +48,8 @@ const MapBoundsFitter: React.FC<MapBoundsFitterProps> = ({ origin, deliveries, r
       routeResult.legs.forEach(leg => {
         if (leg.geometry?.coordinates) {
           leg.geometry.coordinates.forEach((coord: [number, number]) => {
-            // GeoJSON is [lng, lat], Leaflet wants [lat, lng]
-            bounds.extend([coord[1], coord[0]]);
+            // Backend currently returns [lat, lng] instead of GeoJSON standard [lng, lat].
+            bounds.extend([coord[0], coord[1]]);
           });
         }
       });
@@ -178,7 +178,8 @@ export const RouteMap: React.FC<RouteMapProps> = ({
         {/* Route Polylines */}
         {routeResult?.legs && routeResult.legs.map((leg, idx) => {
           if (!leg.geometry?.coordinates) return null;
-          const positions: L.LatLngTuple[] = leg.geometry.coordinates.map((coord: [number, number]) => [coord[1], coord[0]]);
+          // Backend currently returns [lat, lng]
+          const positions: L.LatLngTuple[] = leg.geometry.coordinates.map((coord: [number, number]) => [coord[0], coord[1]]);
           
           return (
             <Polyline 
